@@ -51,6 +51,7 @@ The following people have committed patches to EasyExif.
   * Toshiaki Ohkuma
   * pet.b.hunt
   * Jason Moey
+  * Victor Vedovato
 
 
 ### Example:
