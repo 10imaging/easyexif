@@ -11,3 +11,14 @@ demo: exif.o demo.cpp
 
 clean:
 	rm -f *.o demo demo.exe
+	
+format:
+	clang-format -style=Google -i demo.cpp exif.cpp exif.h
+	
+test: demo valgrind
+	./test.sh
+
+valgrind: 
+	valgrind --leak-check=full ./demo test-images/test1.jpg
+	
+contrib: format test valgrind
