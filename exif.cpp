@@ -34,6 +34,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <vector>
+#include <iostream>
 
 using std::string;
 
@@ -555,7 +556,15 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
         if (result.format() == 3 && result.val_short().size())
           this->Orientation = result.val_short().front();
         break;
-
+        
+      case 0x11a:
+        // Xresolution
+        break;
+        
+      case 0x11b:
+        // Yresolution
+        break;
+        
       case 0x131:
         // Software used for image
         if (result.format() == 2) this->Software = result.val_string();
@@ -580,6 +589,9 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
         // EXIF SubIFD offset
         exif_sub_ifd_offset = tiff_header_start + result.data();
         break;
+        
+      default:
+      std::cout << "IFD result tag: " << result.tag() << "\n";
     }
   }
 
@@ -740,6 +752,8 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
             this->LensInfo.Model = result.val_string();
           }
           break;
+        default:
+        std::cout << "SubIFD result tag: " << result.tag() << "\n";
       }
       offs += 12;
     }

@@ -118,6 +118,8 @@ class EXIFInfo {
                                       // 5: multi-segment
   unsigned ImageWidth;                // Image width reported in EXIF data
   unsigned ImageHeight;               // Image height reported in EXIF data
+  unsigned long long Xresolution;
+  unsigned long long Yresolution;
   struct Geolocation_t {              // GPS information embedded in file
     double Latitude;                  // Image latitude expressed as decimal
     double Longitude;                 // Image longitude expressed as decimal
