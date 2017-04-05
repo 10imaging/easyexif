@@ -30,9 +30,9 @@
 */
 #include "exif.h"
 
+#include <stdio.h>
 #include <algorithm>
 #include <cstdint>
-#include <stdio.h>
 #include <vector>
 
 using std::string;
@@ -408,7 +408,7 @@ IFEntry parseIFEntry(const unsigned char *buf, const unsigned offs,
     return parseIFEntry_temp<false>(buf, offs, base, len);
   }
 }
-}
+}  // namespace
 
 //
 // Locates the EXIF segment and parses it using parseFromEXIFSegment
@@ -463,8 +463,8 @@ int easyexif::EXIFInfo::parseFrom(const unsigned char *buf, unsigned len) {
 }
 
 int easyexif::EXIFInfo::parseFrom(const string &data) {
-  return parseFrom(
-      reinterpret_cast<const unsigned char *>(data.data()), static_cast<unsigned>(data.length()));
+  return parseFrom(reinterpret_cast<const unsigned char *>(data.data()),
+                   static_cast<unsigned>(data.length()));
 }
 
 //
@@ -608,11 +608,11 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
             this->FNumber = result.val_rational().front();
           break;
 
-      case 0x8822:
-        // Exposure Program
-        if (result.format() == 3 && result.val_short().size())
-          this->ExposureProgram = result.val_short().front();
-        break;
+        case 0x8822:
+          // Exposure Program
+          if (result.format() == 3 && result.val_short().size())
+            this->ExposureProgram = result.val_short().front();
+          break;
 
         case 0x8827:
           // ISO Speed Rating
@@ -654,7 +654,7 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
           // Flash used
           if (result.format() == 3 && result.val_short().size()) {
             uint16_t data = result.val_short().front();
-            
+
             this->Flash = data & 1;
             this->FlashReturnedLight = (data & 6) >> 1;
             this->FlashMode = (data & 24) >> 3;
@@ -719,14 +719,11 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
           // Focal length and FStop.
           if (result.format() == 5) {
             int sz = static_cast<unsigned>(result.val_rational().size());
-            if (sz)
-              this->LensInfo.FocalLengthMin = result.val_rational()[0];
+            if (sz) this->LensInfo.FocalLengthMin = result.val_rational()[0];
             if (sz > 1)
               this->LensInfo.FocalLengthMax = result.val_rational()[1];
-            if (sz > 2)
-              this->LensInfo.FStopMin = result.val_rational()[2];
-            if (sz > 3)
-              this->LensInfo.FStopMax = result.val_rational()[3];
+            if (sz > 2) this->LensInfo.FStopMin = result.val_rational()[2];
+            if (sz > 3) this->LensInfo.FStopMax = result.val_rational()[3];
           }
           break;
 
