@@ -74,13 +74,17 @@ class EXIFInfo {
                     // 8: lower left of image
                     // 9: undefined
   unsigned short BitsPerSample;   // Number of bits per component
+  unsigned short ResolutionUnit;  // 1 = None (is not standard EXIF)
+                                  // 2 = inches 
+                                  // 3 = cm
   std::string Software;           // Software used
   std::string DateTime;           // File change date and time
   std::string DateTimeOriginal;   // Original file date and time (may not exist)
   std::string DateTimeDigitized;  // Digitization date and time (may not exist)
-  std::string
-      SubSecTimeOriginal;  // Sub-second time that original picture was taken
-  std::string Copyright;   // File copyright information
+  std::string SubSecTime;         // Sub-second time
+  std::string SubSecTimeOriginal; // Sub-second time that original picture was taken
+  std::string Copyright;          // File copyright information
+  std::string UserComment;        // UserComment field
   double ExposureTime;     // Exposure time in seconds
   double FNumber;          // F/stop
   unsigned short ExposureProgram;  // Exposure program
@@ -93,11 +97,13 @@ class EXIFInfo {
                                    // 6: Action program
                                    // 7: Portrait mode
                                    // 8: Landscape mode
-  unsigned short ISOSpeedRatings;  // ISO speed
-  double ShutterSpeedValue;  // Shutter speed (reciprocal of exposure time)
-  double ExposureBiasValue;  // Exposure bias value in EV
-  double SubjectDistance;    // Distance to focus point in meters
-  double FocalLength;        // Focal length of lens in millimeters
+  unsigned short ISOSpeedRatings;     // ISO speed
+  double ShutterSpeedValue;           // Shutter speed (reciprocal of exposure time)
+  double ApertureValue;               // Aperture value as F#
+  double BrightnessValue;             //
+  double ExposureBiasValue;           // Exposure bias value in EV
+  double SubjectDistance;             // Distance to focus point in meters
+  double FocalLength;                 // Focal length of lens in millimeters
   unsigned short FocalLengthIn35mm;   // Focal length in 35mm film
   char Flash;                         // 0 = no flash, 1 = flash used
   unsigned short FlashReturnedLight;  // Flash returned light status
@@ -118,8 +124,8 @@ class EXIFInfo {
                                       // 5: multi-segment
   unsigned ImageWidth;                // Image width reported in EXIF data
   unsigned ImageHeight;               // Image height reported in EXIF data
-  unsigned long long Xresolution;
-  unsigned long long Yresolution;
+  double Xresolution;                 // X resolution
+  double Yresolution;                 // Y resolution
   struct Geolocation_t {              // GPS information embedded in file
     double Latitude;                  // Image latitude expressed as decimal
     double Longitude;                 // Image longitude expressed as decimal

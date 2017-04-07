@@ -1,6 +1,15 @@
 #include <stdio.h>
 #include "exif.h"
 
+const char * tr_ResolutionUnit(unsigned int ru) {
+  switch (ru) {
+    case 1: return "none";
+    case 2: return "inches";
+    case 3: return "cm";
+    default: return "";
+  }
+}
+
 int main(int argc, char *argv[]) {
   if (argc < 2) {
     printf("Usage: demo <JPEG file>\n");
@@ -42,14 +51,22 @@ int main(int argc, char *argv[]) {
   printf("Image height         : %d\n", result.ImageHeight);
   printf("Image description    : %s\n", result.ImageDescription.c_str());
   printf("Image orientation    : %d\n", result.Orientation);
+  printf("Xresolution          : %.0f\n", result.Xresolution);
+  printf("Yresolution          : %.0f\n", result.Yresolution);
+  printf("ResolutionUnit       : %d (%s)\n", result.ResolutionUnit, 
+          tr_ResolutionUnit(result.ResolutionUnit));
   printf("Image copyright      : %s\n", result.Copyright.c_str());
   printf("Image date/time      : %s\n", result.DateTime.c_str());
   printf("Original date/time   : %s\n", result.DateTimeOriginal.c_str());
   printf("Digitize date/time   : %s\n", result.DateTimeDigitized.c_str());
-  printf("Subsecond time       : %s\n", result.SubSecTimeOriginal.c_str());
+  printf("Subsec time          : %s\n", result.SubSecTime.c_str());
+  printf("Subsec Original time : %s\n", result.SubSecTimeOriginal.c_str());
+  printf("UserComment          : %s\n", result.UserComment.c_str());
   printf("Exposure time        : 1/%d s\n",
          (unsigned)(1.0 / result.ExposureTime));
   printf("F-stop               : f/%.1f\n", result.FNumber);
+  printf("ShutterSpeedValue    : %f s\n", result.ShutterSpeedValue);
+  printf("ApertureValue        : f/%.2f\n", result.ApertureValue);
   printf("Exposure program     : %d\n", result.ExposureProgram);
   printf("ISO speed            : %d\n", result.ISOSpeedRatings);
   printf("Subject distance     : %f m\n", result.SubjectDistance);

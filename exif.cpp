@@ -34,14 +34,32 @@
 #include <algorithm>
 #include <cstdint>
 #include <vector>
-#include <iostream>
 
 using std::string;
+
+#define DEBUG
+#ifdef DEBUG
+#include <iostream>
+using std::hex;
+#define VERBOSE(a) (a);
+#else
+#define VERBOSE(a)
+#endif
 
 namespace {
 
 struct Rational {
   uint32_t numerator, denominator;
+  operator double() const {
+    if (denominator < 1e-20) {
+      return 0;
+    }
+    return static_cast<double>(numerator) / static_cast<double>(denominator);
+  }
+};
+
+struct SRational {
+  int32_t numerator, denominator;
   operator double() const {
     if (denominator < 1e-20) {
       return 0;
@@ -58,6 +76,7 @@ class IFEntry {
   using short_vector = std::vector<uint16_t>;
   using long_vector = std::vector<uint32_t>;
   using rational_vector = std::vector<Rational>;
+  using srational_vector = std::vector<SRational>;
 
   IFEntry()
       : tag_(0xFF), format_(0xFF), data_(0), length_(0), val_byte_(nullptr) {}
@@ -116,6 +135,7 @@ class IFEntry {
   short_vector &val_short() { return *val_short_; }
   long_vector &val_long() { return *val_long_; }
   rational_vector &val_rational() { return *val_rational_; }
+  srational_vector &val_srational() { return *val_srational_; }
 
  private:
   // Raw fields
@@ -131,6 +151,7 @@ class IFEntry {
     short_vector *val_short_;
     long_vector *val_long_;
     rational_vector *val_rational_;
+    srational_vector *val_srational_;
   };
 
   void delete_union() {
@@ -154,6 +175,10 @@ class IFEntry {
       case 0x5:
         delete val_rational_;
         val_rational_ = nullptr;
+        break;
+      case 0xA:
+        delete val_srational_;
+        val_srational_ = nullptr;
         break;
       case 0xff:
         break;
@@ -179,6 +204,9 @@ class IFEntry {
         break;
       case 0x5:
         val_rational_ = new rational_vector();
+        break;
+      case 0xA:
+        val_srational_ = new srational_vector();
         break;
       case 0xff:
         break;
@@ -229,6 +257,20 @@ uint32_t parse<uint32_t, true>(const unsigned char *buf) {
 }
 
 template <>
+int32_t parse<int32_t, false>(const unsigned char *buf) {
+  return (static_cast<int32_t>(buf[0]) << 24) |
+         (static_cast<int32_t>(buf[1]) << 16) |
+         (static_cast<int32_t>(buf[2]) << 8) | buf[3];
+}
+
+template <>
+int32_t parse<int32_t, true>(const unsigned char *buf) {
+  return (static_cast<int32_t>(buf[3]) << 24) |
+         (static_cast<int32_t>(buf[2]) << 16) |
+         (static_cast<int32_t>(buf[1]) << 8) | buf[0];
+}
+
+template <>
 Rational parse<Rational, true>(const unsigned char *buf) {
   Rational r;
   r.numerator = parse<uint32_t, true>(buf);
@@ -241,6 +283,22 @@ Rational parse<Rational, false>(const unsigned char *buf) {
   Rational r;
   r.numerator = parse<uint32_t, false>(buf);
   r.denominator = parse<uint32_t, false>(buf + 4);
+  return r;
+}
+
+template <>
+SRational parse<SRational, true>(const unsigned char *buf) {
+  SRational r;
+  r.numerator = parse<int32_t, true>(buf);
+  r.denominator = parse<int32_t, true>(buf + 4);
+  return r;
+}
+
+template <>
+SRational parse<SRational, false>(const unsigned char *buf) {
+  SRational r;
+  r.numerator = parse<int32_t, false>(buf);
+  r.denominator = parse<int32_t, false>(buf + 4);
   return r;
 }
 
@@ -315,6 +373,8 @@ void parseIFEntryHeader(const unsigned char *buf, IFEntry &result) {
   result.format(format);
   result.length(length);
   result.data(data);
+
+  VERBOSE(std::cout << "tag=" << hex << tag << " format=" << format << " length=" << length << "\n")
 }
 
 template <bool alignIntel>
@@ -372,8 +432,14 @@ IFEntry parseIFEntry_temp(const unsigned char *buf, const unsigned offs,
       break;
     case 7:
     case 9:
-    case 10:
+      VERBOSE(std::cout << "unknown result format=" << result.format() << "\n")
       break;
+    case 10:
+    if (!extract_values<SRational, alignIntel>(result.val_srational(), buf,
+                                              base, len, result)) {
+      result.tag(0xFF);
+    }
+    break;
     default:
       result.tag(0xFF);
   }
@@ -459,6 +525,7 @@ int easyexif::EXIFInfo::parseFrom(const unsigned char *buf, unsigned len) {
   if (offs + section_length > len || section_length < 16)
     return PARSE_EXIF_ERROR_CORRUPT;
   offs += 2;
+  VERBOSE(std::cout << "section_length= " << section_length << "\n")
 
   return parseFromEXIFSegment(buf + offs, len - offs);
 }
@@ -556,15 +623,25 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
         if (result.format() == 3 && result.val_short().size())
           this->Orientation = result.val_short().front();
         break;
-        
+
       case 0x11a:
         // Xresolution
+        if (result.format() == 5 && result.val_rational().size())
+          this->Xresolution = result.val_rational().front();
         break;
         
       case 0x11b:
         // Yresolution
+        if (result.format() == 5 && result.val_rational().size())
+          this->Yresolution = result.val_rational().front();
         break;
-        
+
+      case 0x128:
+        // Resolution Unit
+        if (result.format() == 3 && result.val_short().size())
+          this->ResolutionUnit = result.val_short().front();
+        break;
+
       case 0x131:
         // Software used for image
         if (result.format() == 2) this->Software = result.val_string();
@@ -591,7 +668,7 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
         break;
         
       default:
-      std::cout << "IFD result tag: " << result.tag() << "\n";
+      VERBOSE(std::cout << "IFD skipped tag: " << result.tag() << "\n")
     }
   }
 
@@ -650,6 +727,18 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
             this->ShutterSpeedValue = result.val_rational().front();
           break;
 
+        case 0x9202:
+          // Aperture value
+          if (result.format() == 5 && result.val_rational().size())
+            this->ApertureValue = result.val_rational().front();
+          break;
+
+        case 0x9203:
+          // Brightness value
+          if (result.format() == 10 && result.val_rational().size())
+            this->BrightnessValue = result.val_rational().front();
+          break;
+
         case 0x9204:
           // Exposure bias value
           if (result.format() == 5 && result.val_rational().size())
@@ -683,6 +772,19 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
           // Metering mode
           if (result.format() == 3 && result.val_short().size())
             this->MeteringMode = result.val_short().front();
+          break;
+
+        case 0x9286:
+          // User comment
+          if (result.format() == 2)
+            this->UserComment = result.val_string().substr(10);
+          VERBOSE(std::cout << "UserComment" << "\n")
+          break;
+
+        case 0x9290:
+          // Subsecond time
+          if (result.format() == 2)
+            this->SubSecTime = result.val_string();
           break;
 
         case 0x9291:
@@ -753,7 +855,7 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
           }
           break;
         default:
-        std::cout << "SubIFD result tag: " << result.tag() << "\n";
+        VERBOSE(std::cout << "SubIFD skipped tag: " << result.tag() << "\n")
       }
       offs += 12;
     }
@@ -896,6 +998,8 @@ void easyexif::EXIFInfo::clear() {
   MeteringMode = 0;
   ImageWidth = 0;
   ImageHeight = 0;
+  Xresolution = 0;
+  Yresolution = 0;
 
   // Geolocation
   GeoLocation.Latitude = 0;
