@@ -35,8 +35,7 @@ int main(int argc, char *argv[]) {
 
   // Parse EXIF
   easyexif::EXIFInfo result;
-  int code = result.parseFrom(buf, fsize);
-  delete[] buf;
+  int code = result.read(buf, fsize);
   if (code) {
     printf("Error parsing EXIF: code %d\n", code);
     return -3;
@@ -61,7 +60,7 @@ int main(int argc, char *argv[]) {
   printf("Digitize date/time   : %s\n", result.DateTimeDigitized.c_str());
   printf("Subsec time          : %s\n", result.SubSecTime.c_str());
   printf("Subsec Original time : %s\n", result.SubSecTimeOriginal.c_str());
-  printf("UserComment          : %s\n", result.UserComment.c_str());
+  printf("UserComment          : \n%s", result.UserComment.c_str());
   printf("Exposure time        : 1/%d s\n",
          (unsigned)(1.0 / result.ExposureTime));
   printf("F-stop               : f/%.1f\n", result.FNumber);
@@ -97,6 +96,16 @@ int main(int argc, char *argv[]) {
   printf("Lens model           : %s\n", result.LensInfo.Model.c_str());
   printf("Focal plane XRes     : %f\n", result.LensInfo.FocalPlaneXResolution);
   printf("Focal plane YRes     : %f\n", result.LensInfo.FocalPlaneYResolution);
+
+  result.UserComment = result.UserComment + std::string("   testing new EXIF UserComment TAG\n");
+  std::string newOutput = std::string("test.jpg");
+  code = result.write(newOutput, buf, fsize);
+  if (code) {
+    printf("Error writing ''%s' : code %d\n", newOutput.c_str(), code);
+    return -4;
+  }
+  
+  delete[] buf;
 
   return 0;
 }

@@ -374,7 +374,7 @@ void parseIFEntryHeader(const unsigned char *buf, IFEntry &result) {
   result.length(length);
   result.data(data);
 
-  VERBOSE(std::cout << "tag=" << hex << tag << " format=" << format << " length=" << length << "\n")
+  VERBOSE(std::cerr << "tag=" << hex << tag << " format=" << format << " length=" << length << "\n")
 }
 
 template <bool alignIntel>
@@ -432,7 +432,7 @@ IFEntry parseIFEntry_temp(const unsigned char *buf, const unsigned offs,
       break;
     case 7:
     case 9:
-      VERBOSE(std::cout << "unknown result format=" << result.format() << "\n")
+      VERBOSE(std::cerr << "unknown result format=" << result.format() << "\n")
       break;
     case 10:
     if (!extract_values<SRational, alignIntel>(result.val_srational(), buf,
@@ -480,7 +480,7 @@ IFEntry parseIFEntry(const unsigned char *buf, const unsigned offs,
 //
 // Locates the EXIF segment and parses it using parseFromEXIFSegment
 //
-int easyexif::EXIFInfo::parseFrom(const unsigned char *buf, unsigned len) {
+int easyexif::EXIFInfo::read(const unsigned char *buf, unsigned len) {
   // Sanity check: all JPEG files start with 0xFFD8.
   if (!buf || len < 4) return PARSE_EXIF_ERROR_NO_JPEG;
   if (buf[0] != 0xFF || buf[1] != 0xD8) return PARSE_EXIF_ERROR_NO_JPEG;
@@ -525,14 +525,52 @@ int easyexif::EXIFInfo::parseFrom(const unsigned char *buf, unsigned len) {
   if (offs + section_length > len || section_length < 16)
     return PARSE_EXIF_ERROR_CORRUPT;
   offs += 2;
-  VERBOSE(std::cout << "section_length= " << section_length << "\n")
+  VERBOSE(std::cerr << "section_length= " << section_length << "\n")
 
   return parseFromEXIFSegment(buf + offs, len - offs);
 }
 
-int easyexif::EXIFInfo::parseFrom(const string &data) {
-  return parseFrom(reinterpret_cast<const unsigned char *>(data.data()),
+/*
+int easyexif::EXIFInfo::read(const string &data) {
+  return read(reinterpret_cast<const unsigned char *>(data.data()),
                    static_cast<unsigned>(data.length()));
+}*/
+
+int easyexif::EXIFInfo::read(std::string inputFile) {
+  int rval = 0;
+  // Read the JPEG file into a buffer
+  FILE *fp = fopen(inputFile.data(), "rb");
+  if (!fp) {
+    VERBOSE(std::cerr << "File not found '" << inputFile << "'\n")
+    return -1;
+  }
+  fseek(fp, 0, SEEK_END);
+  unsigned long fsize = ftell(fp);
+  rewind(fp);
+  unsigned char *buf = new unsigned char[fsize];
+  if (fread(buf, 1, fsize, fp) != fsize) {
+    VERBOSE(std::cerr << "Cannot read file '" << inputFile << "'\n")
+    delete[] buf;
+    fclose(fp);    
+    return -2;
+  }
+  
+  fclose(fp);
+  easyexif::EXIFInfo result;
+  rval = result.read(buf, fsize);
+  delete[] buf;
+  return rval;
+}
+
+int easyexif::EXIFInfo::write(std::string outputFile, const unsigned char *buf, unsigned len) {
+  int rval = 0;
+  FILE *fp = fopen(outputFile.data(), "wb");
+  if (fwrite(buf, 1, len, fp) != len) {
+    VERBOSE(std::cerr << "Cannot write file '" << outputFile << "'\n")
+    rval = -1;
+  }
+  fclose(fp);
+  return rval;
 }
 
 //
@@ -668,7 +706,7 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
         break;
         
       default:
-      VERBOSE(std::cout << "IFD skipped tag: " << result.tag() << "\n")
+      VERBOSE(std::cerr << "IFD skipped tag: " << result.tag() << "\n")
     }
   }
 
@@ -777,8 +815,8 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
         case 0x9286:
           // User comment
           if (result.format() == 2)
-            this->UserComment = result.val_string().substr(10);
-          VERBOSE(std::cout << "UserComment" << "\n")
+            this->UserComment = result.val_string().substr(8);
+          VERBOSE(std::cerr << "UserComment" << "\n")
           break;
 
         case 0x9290:
@@ -855,7 +893,7 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
           }
           break;
         default:
-        VERBOSE(std::cout << "SubIFD skipped tag: " << result.tag() << "\n")
+        VERBOSE(std::cerr << "SubIFD skipped tag: " << result.tag() << "\n")
       }
       offs += 12;
     }
@@ -1026,3 +1064,4 @@ void easyexif::EXIFInfo::clear() {
   LensInfo.Make = "";
   LensInfo.Model = "";
 }
+

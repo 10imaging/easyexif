@@ -49,9 +49,10 @@ class EXIFInfo {
   // PARAM 'length': The length of the JPEG image.
   // RETURN:  PARSE_EXIF_SUCCESS (0) on succes with 'result' filled out
   //          error code otherwise, as defined by the PARSE_EXIF_ERROR_* macros
-  int parseFrom(const unsigned char *data, unsigned length);
-  int parseFrom(const std::string &data);
-
+  int read(const unsigned char *data, unsigned length);
+//  int read(const std::string &data);
+  int read(std::string inputFile);
+  int write(std::string outputFile, const unsigned char *buf, unsigned len);
   // Parsing function for an EXIF segment. This is used internally by
   // parseFrom() but can be called for special cases where only the EXIF section
   // is available (i.e., a blob starting with the bytes "Exif\0\0").
