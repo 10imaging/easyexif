@@ -37,11 +37,13 @@
 
 using std::string;
 
-#define DEBUG
+#ifndef DEBUG
+    #define DEBUG
+#endif
+
 #ifdef DEBUG
 #include <iostream>
-using std::hex;
-#define VERBOSE(a) (a);
+#define VERBOSE(a) (a)
 #else
 #define VERBOSE(a)
 #endif
@@ -310,8 +312,8 @@ SRational parse<SRational, false>(const unsigned char *buf) {
  *  false - something went wrong, vec's content was not touched
  */
 template <typename T, bool alignIntel, typename C>
-bool extract_values(C &container, const unsigned char *buf, const unsigned base,
-                    const unsigned len, const IFEntry &entry) {
+bool extract_values(C &container, const unsigned char *buf, const unsigned long base,
+                    const unsigned long len, const IFEntry &entry) {
   const unsigned char *data;
   uint32_t reversed_data;
   // if data fits into 4 bytes, they are stored directly in
@@ -374,12 +376,12 @@ void parseIFEntryHeader(const unsigned char *buf, IFEntry &result) {
   result.length(length);
   result.data(data);
 
-  VERBOSE(std::cerr << "tag=" << hex << tag << " format=" << format << " length=" << length << "\n")
+  VERBOSE(std::cerr << "\nIFD tag=0x" << std::hex << tag << "(" << std::dec << tag << ")" << " format=" << format << " length=" << length << std::dec);
 }
 
 template <bool alignIntel>
-IFEntry parseIFEntry_temp(const unsigned char *buf, const unsigned offs,
-                          const unsigned base, const unsigned len) {
+IFEntry parseIFEntry_temp(const unsigned char *buf, const unsigned long offs,
+                          const unsigned long base, const unsigned long len) {
   IFEntry result;
 
   // check if there even is enough data for IFEntry in the buffer
@@ -432,7 +434,7 @@ IFEntry parseIFEntry_temp(const unsigned char *buf, const unsigned offs,
       break;
     case 7:
     case 9:
-      VERBOSE(std::cerr << "unknown result format=" << result.format() << "\n")
+      VERBOSE(std::cerr << " - unknown format");
       break;
     case 10:
     if (!extract_values<SRational, alignIntel>(result.val_srational(), buf,
@@ -466,9 +468,9 @@ void parseIFEntryHeader(const unsigned char *buf, bool alignIntel,
   }
 }
 
-IFEntry parseIFEntry(const unsigned char *buf, const unsigned offs,
-                     const bool alignIntel, const unsigned base,
-                     const unsigned len) {
+IFEntry parseIFEntry(const unsigned char *buf, const unsigned long offs,
+                     const bool alignIntel, const unsigned long base,
+                     const unsigned long len) {
   if (alignIntel) {
     return parseIFEntry_temp<true>(buf, offs, base, len);
   } else {
@@ -480,7 +482,7 @@ IFEntry parseIFEntry(const unsigned char *buf, const unsigned offs,
 //
 // Locates the EXIF segment and parses it using parseFromEXIFSegment
 //
-int easyexif::EXIFInfo::read(const unsigned char *buf, unsigned len) {
+int easyexif::EXIFInfo::read(const unsigned char *buf, unsigned long len) {
   // Sanity check: all JPEG files start with 0xFFD8.
   if (!buf || len < 4) return PARSE_EXIF_ERROR_NO_JPEG;
   if (buf[0] != 0xFF || buf[1] != 0xD8) return PARSE_EXIF_ERROR_NO_JPEG;
@@ -525,7 +527,7 @@ int easyexif::EXIFInfo::read(const unsigned char *buf, unsigned len) {
   if (offs + section_length > len || section_length < 16)
     return PARSE_EXIF_ERROR_CORRUPT;
   offs += 2;
-  VERBOSE(std::cerr << "section_length= " << section_length << "\n")
+  VERBOSE(std::cerr << "section_length= " << section_length << "\n");
 
   return parseFromEXIFSegment(buf + offs, len - offs);
 }
@@ -541,7 +543,7 @@ int easyexif::EXIFInfo::read(std::string inputFile) {
   // Read the JPEG file into a buffer
   FILE *fp = fopen(inputFile.data(), "rb");
   if (!fp) {
-    VERBOSE(std::cerr << "File not found '" << inputFile << "'\n")
+    VERBOSE(std::cerr << "File not found '" << inputFile << "'\n");
     return -1;
   }
   fseek(fp, 0, SEEK_END);
@@ -549,7 +551,7 @@ int easyexif::EXIFInfo::read(std::string inputFile) {
   rewind(fp);
   unsigned char *buf = new unsigned char[fsize];
   if (fread(buf, 1, fsize, fp) != fsize) {
-    VERBOSE(std::cerr << "Cannot read file '" << inputFile << "'\n")
+    VERBOSE(std::cerr << "Cannot read file '" << inputFile << "'\n");
     delete[] buf;
     fclose(fp);    
     return -2;
@@ -562,15 +564,35 @@ int easyexif::EXIFInfo::read(std::string inputFile) {
   return rval;
 }
 
-int easyexif::EXIFInfo::write(std::string outputFile, const unsigned char *buf, unsigned len) {
+int easyexif::EXIFInfo::write(std::string outputFile, const unsigned char *buf, unsigned long len) {
   int rval = 0;
+  uint16_t JPEG_SOI = 0xD8FF, JPEG_EOI = 0xD9FF, EXIF_HEADER = 0xE1FF;
+  
   FILE *fp = fopen(outputFile.data(), "wb");
-  if (fwrite(buf, 1, len, fp) != len) {
-    VERBOSE(std::cerr << "Cannot write file '" << outputFile << "'\n")
-    rval = -1;
-  }
+  
+  rval = (fwrite(&JPEG_SOI, 1, sizeof(JPEG_SOI), fp) == sizeof(JPEG_SOI));
+  // EXIF header
+  //   2 bytes: 0xFFE1 (big-endian) 0xE1FF (little-endian)
+  //   2 bytes: section size
+  //   6 bytes: "Exif\0\0" string
+  //   2 bytes: TIFF header (either "II" or "MM" string)
+  //   2 bytes: TIFF magic (short 0x2a00 in Motorola byte order)
+  //   4 bytes: Offset to first IFD
+  //  16 bytes: TOTAL
+  if (rval) rval = (fwrite(&EXIF_HEADER, 1, sizeof(EXIF_HEADER), fp) == sizeof(EXIF_HEADER));
+  // SECTION SIZE
+  if (rval) rval = (fputs("Exif", fp) == 4);
+  if (rval) rval = (fwrite("\0\0", 2, 1, fp) == 1);
+  if (rval) rval = (fputs("MM", fp) == 2);
+  if (rval) rval = (fwrite("\x00\x2a", 2, 1, fp) == 1);
+  if (rval) rval = (fwrite("\0\0\0\0", 4, 1, fp) == 1);
+  // EXIF IFD data
+  // JPEG image data
+  // JPEG footer 0xFFD9 (big-endian) 0xD9FF (little endian)
+  if (rval) rval = (fwrite(&JPEG_EOI, 1, sizeof(JPEG_EOI), fp) == sizeof(JPEG_EOI));
+
   fclose(fp);
-  return rval;
+  return rval != 1;
 }
 
 //
@@ -579,10 +601,9 @@ int easyexif::EXIFInfo::write(std::string outputFile, const unsigned char *buf, 
 // PARAM: 'buf' start of the EXIF TIFF, which must be the bytes "Exif\0\0".
 // PARAM: 'len' length of buffer
 //
-int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
-                                             unsigned len) {
+int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf, unsigned long len) {
   bool alignIntel = true;  // byte alignment (defined in EXIF header)
-  unsigned offs = 0;       // current offset into buffer
+  unsigned long offs = 0;       // current offset into buffer
   if (!buf || len < 6) return PARSE_EXIF_ERROR_NO_EXIF;
 
   if (!std::equal(buf, buf + 6, "Exif\0\0")) return PARSE_EXIF_ERROR_NO_EXIF;
@@ -600,7 +621,7 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
   // -----------------------------
   //  8 bytes
   if (offs + 8 > len) return PARSE_EXIF_ERROR_CORRUPT;
-  unsigned tiff_header_start = offs;
+  unsigned long tiff_header_start = offs;
   if (buf[offs] == 'I' && buf[offs + 1] == 'I')
     alignIntel = true;
   else {
@@ -614,10 +635,11 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
   if (0x2a != parse_value<uint16_t>(buf + offs, alignIntel))
     return PARSE_EXIF_ERROR_CORRUPT;
   offs += 2;
-  unsigned first_ifd_offset = parse_value<uint32_t>(buf + offs, alignIntel);
+  unsigned long first_ifd_offset = parse_value<uint32_t>(buf + offs, alignIntel);
   offs += first_ifd_offset - 4;
   if (offs >= len) return PARSE_EXIF_ERROR_CORRUPT;
-
+  VERBOSE(std::cerr << "First IFD offset: 0x" << std::hex << first_ifd_offset << std::dec << "\n");
+  
   // Now parsing the first Image File Directory (IFD0, for the main image).
   // An IFD consists of a variable number of 12-byte directory entries. The
   // first two bytes of the IFD section contain the number of directory
@@ -626,10 +648,11 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
   // bytes of data.
   if (offs + 2 > len) return PARSE_EXIF_ERROR_CORRUPT;
   int num_entries = parse_value<uint16_t>(buf + offs, alignIntel);
+  VERBOSE(std::cerr << "IFD entries: " << std::dec << num_entries);
   if (offs + 6 + 12 * num_entries > len) return PARSE_EXIF_ERROR_CORRUPT;
   offs += 2;
-  unsigned exif_sub_ifd_offset = len;
-  unsigned gps_sub_ifd_offset = len;
+  unsigned long exif_sub_ifd_offset = len;
+  unsigned long gps_sub_ifd_offset = len;
   while (--num_entries >= 0) {
     IFEntry result =
         parseIFEntry(buf, offs, alignIntel, tiff_header_start, len);
@@ -706,7 +729,7 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
         break;
         
       default:
-      VERBOSE(std::cerr << "IFD skipped tag: " << result.tag() << "\n")
+      VERBOSE(std::cerr << " - skipped ");
     }
   }
 
@@ -816,7 +839,6 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
           // User comment
           if (result.format() == 2)
             this->UserComment = result.val_string().substr(8);
-          VERBOSE(std::cerr << "UserComment" << "\n")
           break;
 
         case 0x9290:
@@ -893,7 +915,7 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
           }
           break;
         default:
-        VERBOSE(std::cerr << "SubIFD skipped tag: " << result.tag() << "\n")
+        VERBOSE(std::cerr << " - skipped ");
       }
       offs += 12;
     }
@@ -1000,6 +1022,7 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf,
       offs += 12;
     }
   }
+  VERBOSE(std::cerr << "\n");
 
   return PARSE_EXIF_SUCCESS;
 }

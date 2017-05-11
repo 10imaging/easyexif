@@ -36,6 +36,23 @@
 
 #include <string>
 
+#if defined(__BYTE_ORDER) && __BYTE_ORDER == __BIG_ENDIAN || \
+    defined(__BIG_ENDIAN__) || \
+    defined(__ARMEB__) || \
+    defined(__THUMBEB__) || \
+    defined(__AARCH64EB__) || \
+    defined(_MIBSEB) || defined(__MIBSEB) || defined(__MIBSEB__)
+#error "Big endian architecture unsupported"
+#elif defined(__BYTE_ORDER) && __BYTE_ORDER == __LITTLE_ENDIAN || \
+    defined(__LITTLE_ENDIAN__) || \
+    defined(__ARMEL__) || \
+    defined(__THUMBEL__) || \
+    defined(__AARCH64EL__) || \
+    defined(_MIPSEL) || defined(__MIPSEL) || defined(__MIPSEL__)
+#else
+#error "Unknown endian architecture!"
+#endif
+
 namespace easyexif {
 
 //
@@ -49,14 +66,14 @@ class EXIFInfo {
   // PARAM 'length': The length of the JPEG image.
   // RETURN:  PARSE_EXIF_SUCCESS (0) on succes with 'result' filled out
   //          error code otherwise, as defined by the PARSE_EXIF_ERROR_* macros
-  int read(const unsigned char *data, unsigned length);
+  int read(const unsigned char *data, unsigned long length);
 //  int read(const std::string &data);
   int read(std::string inputFile);
-  int write(std::string outputFile, const unsigned char *buf, unsigned len);
+  int write(std::string outputFile, const unsigned char *buf, unsigned long len);
   // Parsing function for an EXIF segment. This is used internally by
   // parseFrom() but can be called for special cases where only the EXIF section
   // is available (i.e., a blob starting with the bytes "Exif\0\0").
-  int parseFromEXIFSegment(const unsigned char *buf, unsigned len);
+  int parseFromEXIFSegment(const unsigned char *buf, unsigned long len);
 
   // Set all data members to default values.
   void clear();
