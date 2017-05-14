@@ -221,7 +221,7 @@ class IFEntry {
 };
 
 // Helper functions
-template <typename T, bool alignIntel>
+template <typename T, bool isLittleEndian>
 T parse(const unsigned char *buf);
 
 template <>
@@ -311,7 +311,7 @@ SRational parse<SRational, false>(const unsigned char *buf) {
  *  true  - entry.length() values were read
  *  false - something went wrong, vec's content was not touched
  */
-template <typename T, bool alignIntel, typename C>
+template <typename T, bool isLittleEndian, typename C>
 bool extract_values(C &container, const unsigned char *buf, const unsigned long base,
                     const unsigned long len, const IFEntry &entry) {
   const unsigned char *data;
@@ -319,7 +319,7 @@ bool extract_values(C &container, const unsigned char *buf, const unsigned long 
   // if data fits into 4 bytes, they are stored directly in
   // the data field in IFEntry
   if (sizeof(T) * entry.length() <= 4) {
-    if (alignIntel) {
+    if (isLittleEndian) {
       reversed_data = entry.data();
     } else {
       reversed_data = entry.data();
@@ -342,12 +342,12 @@ bool extract_values(C &container, const unsigned char *buf, const unsigned long 
   }
   container.resize(entry.length());
   for (size_t i = 0; i < entry.length(); ++i) {
-    container[i] = parse<T, alignIntel>(data + sizeof(T) * i);
+    container[i] = parse<T, isLittleEndian>(data + sizeof(T) * i);
   }
   return true;
 }
 
-template <bool alignIntel>
+template <bool isLittleEndian>
 void parseIFEntryHeader(const unsigned char *buf, unsigned short &tag,
                         unsigned short &format, unsigned &length,
                         unsigned &data) {
@@ -356,20 +356,20 @@ void parseIFEntryHeader(const unsigned char *buf, unsigned short &tag,
   // 2 bytes: data format
   // 4 bytes: number of components
   // 4 bytes: data value or offset to data value
-  tag = parse<uint16_t, alignIntel>(buf);
-  format = parse<uint16_t, alignIntel>(buf + 2);
-  length = parse<uint32_t, alignIntel>(buf + 4);
-  data = parse<uint32_t, alignIntel>(buf + 8);
+  tag = parse<uint16_t, isLittleEndian>(buf);
+  format = parse<uint16_t, isLittleEndian>(buf + 2);
+  length = parse<uint32_t, isLittleEndian>(buf + 4);
+  data = parse<uint32_t, isLittleEndian>(buf + 8);
 }
 
-template <bool alignIntel>
+template <bool isLittleEndian>
 void parseIFEntryHeader(const unsigned char *buf, IFEntry &result) {
   unsigned short tag;
   unsigned short format;
   unsigned length;
   unsigned data;
 
-  parseIFEntryHeader<alignIntel>(buf, tag, format, length, data);
+  parseIFEntryHeader<isLittleEndian>(buf, tag, format, length, data);
 
   result.tag(tag);
   result.format(format);
@@ -379,7 +379,7 @@ void parseIFEntryHeader(const unsigned char *buf, IFEntry &result) {
   VERBOSE(std::cerr << "\nIFD tag=0x" << std::hex << tag << "(" << std::dec << tag << ")" << " format=" << format << " length=" << length << std::dec);
 }
 
-template <bool alignIntel>
+template <bool isLittleEndian>
 IFEntry parseIFEntry_temp(const unsigned char *buf, const unsigned long offs,
                           const unsigned long base, const unsigned long len) {
   IFEntry result;
@@ -390,12 +390,12 @@ IFEntry parseIFEntry_temp(const unsigned char *buf, const unsigned long offs,
     return result;
   }
 
-  parseIFEntryHeader<alignIntel>(buf + offs, result);
+  parseIFEntryHeader<isLittleEndian>(buf + offs, result);
 
   // Parse value in specified format
   switch (result.format()) {
     case 1:
-      if (!extract_values<uint8_t, alignIntel>(result.val_byte(), buf, base,
+      if (!extract_values<uint8_t, isLittleEndian>(result.val_byte(), buf, base,
                                                len, result)) {
         result.tag(0xFF);
       }
@@ -404,7 +404,7 @@ IFEntry parseIFEntry_temp(const unsigned char *buf, const unsigned long offs,
       // string is basically sequence of uint8_t (well, according to EXIF even
       // uint7_t, but
       // we don't have that), so just read it as bytes
-      if (!extract_values<uint8_t, alignIntel>(result.val_string(), buf, base,
+      if (!extract_values<uint8_t, isLittleEndian>(result.val_string(), buf, base,
                                                len, result)) {
         result.tag(0xFF);
       }
@@ -415,19 +415,19 @@ IFEntry parseIFEntry_temp(const unsigned char *buf, const unsigned long offs,
       }
       break;
     case 3:
-      if (!extract_values<uint16_t, alignIntel>(result.val_short(), buf, base,
+      if (!extract_values<uint16_t, isLittleEndian>(result.val_short(), buf, base,
                                                 len, result)) {
         result.tag(0xFF);
       }
       break;
     case 4:
-      if (!extract_values<uint32_t, alignIntel>(result.val_long(), buf, base,
+      if (!extract_values<uint32_t, isLittleEndian>(result.val_long(), buf, base,
                                                 len, result)) {
         result.tag(0xFF);
       }
       break;
     case 5:
-      if (!extract_values<Rational, alignIntel>(result.val_rational(), buf,
+      if (!extract_values<Rational, isLittleEndian>(result.val_rational(), buf,
                                                 base, len, result)) {
         result.tag(0xFF);
       }
@@ -437,7 +437,7 @@ IFEntry parseIFEntry_temp(const unsigned char *buf, const unsigned long offs,
       VERBOSE(std::cerr << " - unknown format");
       break;
     case 10:
-    if (!extract_values<SRational, alignIntel>(result.val_srational(), buf,
+    if (!extract_values<SRational, isLittleEndian>(result.val_srational(), buf,
                                               base, len, result)) {
       result.tag(0xFF);
     }
@@ -450,18 +450,18 @@ IFEntry parseIFEntry_temp(const unsigned char *buf, const unsigned long offs,
 
 // helper functions for convinience
 template <typename T>
-T parse_value(const unsigned char *buf, bool alignIntel) {
-  if (alignIntel) {
+T parse_value(const unsigned char *buf, bool isLittleEndian) {
+  if (isLittleEndian) {
     return parse<T, true>(buf);
   } else {
     return parse<T, false>(buf);
   }
 }
 
-void parseIFEntryHeader(const unsigned char *buf, bool alignIntel,
+void parseIFEntryHeader(const unsigned char *buf, bool isLittleEndian,
                         unsigned short &tag, unsigned short &format,
                         unsigned &length, unsigned &data) {
-  if (alignIntel) {
+  if (isLittleEndian) {
     parseIFEntryHeader<true>(buf, tag, format, length, data);
   } else {
     parseIFEntryHeader<false>(buf, tag, format, length, data);
@@ -469,9 +469,9 @@ void parseIFEntryHeader(const unsigned char *buf, bool alignIntel,
 }
 
 IFEntry parseIFEntry(const unsigned char *buf, const unsigned long offs,
-                     const bool alignIntel, const unsigned long base,
+                     const bool isLittleEndian, const unsigned long base,
                      const unsigned long len) {
-  if (alignIntel) {
+  if (isLittleEndian) {
     return parseIFEntry_temp<true>(buf, offs, base, len);
   } else {
     return parseIFEntry_temp<false>(buf, offs, base, len);
@@ -480,7 +480,7 @@ IFEntry parseIFEntry(const unsigned char *buf, const unsigned long offs,
 }  // namespace
 
 //
-// Locates the EXIF segment and parses it using parseFromEXIFSegment
+// Locates the EXIF segment and parses it using decodeEXIFsegment
 //
 int easyexif::EXIFInfo::read(const unsigned char *buf, unsigned long len) {
   // Sanity check: all JPEG files start with 0xFFD8.
@@ -529,7 +529,7 @@ int easyexif::EXIFInfo::read(const unsigned char *buf, unsigned long len) {
   offs += 2;
   VERBOSE(std::cerr << "section_length= " << section_length << "\n");
 
-  return parseFromEXIFSegment(buf + offs, len - offs);
+  return decodeEXIFsegment(buf + offs, len - offs);
 }
 
 /*
@@ -564,7 +564,7 @@ int easyexif::EXIFInfo::read(std::string inputFile) {
   return rval;
 }
 
-int easyexif::EXIFInfo::write(std::string outputFile, const unsigned char *buf, unsigned long len) {
+int easyexif::EXIFInfo::write(std::string outputFile) {
   int rval = 0;
   uint16_t JPEG_SOI = 0xD8FF, JPEG_EOI = 0xD9FF, EXIF_HEADER = 0xE1FF;
   
@@ -601,8 +601,8 @@ int easyexif::EXIFInfo::write(std::string outputFile, const unsigned char *buf, 
 // PARAM: 'buf' start of the EXIF TIFF, which must be the bytes "Exif\0\0".
 // PARAM: 'len' length of buffer
 //
-int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf, unsigned long len) {
-  bool alignIntel = true;  // byte alignment (defined in EXIF header)
+int easyexif::EXIFInfo::decodeEXIFsegment(const unsigned char *buf, unsigned long len) {
+  bool isLittleEndian = true;  // byte alignment (defined in EXIF header)
   unsigned long offs = 0;       // current offset into buffer
   if (!buf || len < 6) return PARSE_EXIF_ERROR_NO_EXIF;
 
@@ -623,19 +623,19 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf, unsigned 
   if (offs + 8 > len) return PARSE_EXIF_ERROR_CORRUPT;
   unsigned long tiff_header_start = offs;
   if (buf[offs] == 'I' && buf[offs + 1] == 'I')
-    alignIntel = true;
+    isLittleEndian = true;
   else {
     if (buf[offs] == 'M' && buf[offs + 1] == 'M')
-      alignIntel = false;
+      isLittleEndian = false;
     else
       return PARSE_EXIF_ERROR_UNKNOWN_BYTEALIGN;
   }
-  this->ByteAlign = alignIntel;
+  this->ByteAlign = isLittleEndian;
   offs += 2;
-  if (0x2a != parse_value<uint16_t>(buf + offs, alignIntel))
+  if (0x2a != parse_value<uint16_t>(buf + offs, isLittleEndian))
     return PARSE_EXIF_ERROR_CORRUPT;
   offs += 2;
-  unsigned long first_ifd_offset = parse_value<uint32_t>(buf + offs, alignIntel);
+  unsigned long first_ifd_offset = parse_value<uint32_t>(buf + offs, isLittleEndian);
   offs += first_ifd_offset - 4;
   if (offs >= len) return PARSE_EXIF_ERROR_CORRUPT;
   VERBOSE(std::cerr << "First IFD offset: 0x" << std::hex << first_ifd_offset << std::dec << "\n");
@@ -647,7 +647,7 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf, unsigned 
   // to the next IFD, which means this IFD must contain exactly 6 + 12 * num
   // bytes of data.
   if (offs + 2 > len) return PARSE_EXIF_ERROR_CORRUPT;
-  int num_entries = parse_value<uint16_t>(buf + offs, alignIntel);
+  int num_entries = parse_value<uint16_t>(buf + offs, isLittleEndian);
   VERBOSE(std::cerr << "IFD entries: " << std::dec << num_entries);
   if (offs + 6 + 12 * num_entries > len) return PARSE_EXIF_ERROR_CORRUPT;
   offs += 2;
@@ -655,7 +655,7 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf, unsigned 
   unsigned long gps_sub_ifd_offset = len;
   while (--num_entries >= 0) {
     IFEntry result =
-        parseIFEntry(buf, offs, alignIntel, tiff_header_start, len);
+        parseIFEntry(buf, offs, isLittleEndian, tiff_header_start, len);
     offs += 12;
     switch (result.tag()) {
       case 0x102:
@@ -739,12 +739,12 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf, unsigned 
   // typical user might want.
   if (exif_sub_ifd_offset + 4 <= len) {
     offs = exif_sub_ifd_offset;
-    int num_entries = parse_value<uint16_t>(buf + offs, alignIntel);
+    int num_entries = parse_value<uint16_t>(buf + offs, isLittleEndian);
     if (offs + 6 + 12 * num_entries > len) return PARSE_EXIF_ERROR_CORRUPT;
     offs += 2;
     while (--num_entries >= 0) {
       IFEntry result =
-          parseIFEntry(buf, offs, alignIntel, tiff_header_start, len);
+          parseIFEntry(buf, offs, isLittleEndian, tiff_header_start, len);
       switch (result.tag()) {
         case 0x829a:
           // Exposure time in seconds
@@ -925,13 +925,13 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf, unsigned 
   // there. Note that it's possible that the GPS SubIFD doesn't exist.
   if (gps_sub_ifd_offset + 4 <= len) {
     offs = gps_sub_ifd_offset;
-    int num_entries = parse_value<uint16_t>(buf + offs, alignIntel);
+    int num_entries = parse_value<uint16_t>(buf + offs, isLittleEndian);
     if (offs + 6 + 12 * num_entries > len) return PARSE_EXIF_ERROR_CORRUPT;
     offs += 2;
     while (--num_entries >= 0) {
       unsigned short tag, format;
       unsigned length, data;
-      parseIFEntryHeader(buf + offs, alignIntel, tag, format, length, data);
+      parseIFEntryHeader(buf + offs, isLittleEndian, tag, format, length, data);
       switch (tag) {
         case 1:
           // GPS north or south
@@ -948,11 +948,11 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf, unsigned 
           // GPS latitude
           if ((format == 5 || format == 10) && length == 3) {
             this->GeoLocation.LatComponents.degrees = parse_value<Rational>(
-                buf + data + tiff_header_start, alignIntel);
+                buf + data + tiff_header_start, isLittleEndian);
             this->GeoLocation.LatComponents.minutes = parse_value<Rational>(
-                buf + data + tiff_header_start + 8, alignIntel);
+                buf + data + tiff_header_start + 8, isLittleEndian);
             this->GeoLocation.LatComponents.seconds = parse_value<Rational>(
-                buf + data + tiff_header_start + 16, alignIntel);
+                buf + data + tiff_header_start + 16, isLittleEndian);
             this->GeoLocation.Latitude =
                 this->GeoLocation.LatComponents.degrees +
                 this->GeoLocation.LatComponents.minutes / 60 +
@@ -978,11 +978,11 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf, unsigned 
           // GPS longitude
           if ((format == 5 || format == 10) && length == 3) {
             this->GeoLocation.LonComponents.degrees = parse_value<Rational>(
-                buf + data + tiff_header_start, alignIntel);
+                buf + data + tiff_header_start, isLittleEndian);
             this->GeoLocation.LonComponents.minutes = parse_value<Rational>(
-                buf + data + tiff_header_start + 8, alignIntel);
+                buf + data + tiff_header_start + 8, isLittleEndian);
             this->GeoLocation.LonComponents.seconds = parse_value<Rational>(
-                buf + data + tiff_header_start + 16, alignIntel);
+                buf + data + tiff_header_start + 16, isLittleEndian);
             this->GeoLocation.Longitude =
                 this->GeoLocation.LonComponents.degrees +
                 this->GeoLocation.LonComponents.minutes / 60 +
@@ -1004,7 +1004,7 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf, unsigned 
           // GPS altitude
           if ((format == 5 || format == 10)) {
             this->GeoLocation.Altitude = parse_value<Rational>(
-                buf + data + tiff_header_start, alignIntel);
+                buf + data + tiff_header_start, isLittleEndian);
             if (1 == this->GeoLocation.AltitudeRef) {
               this->GeoLocation.Altitude = -this->GeoLocation.Altitude;
             }
@@ -1015,7 +1015,7 @@ int easyexif::EXIFInfo::parseFromEXIFSegment(const unsigned char *buf, unsigned 
           // GPS degree of precision (DOP)
           if ((format == 5 || format == 10)) {
             this->GeoLocation.DOP = parse_value<Rational>(
-                buf + data + tiff_header_start, alignIntel);
+                buf + data + tiff_header_start, isLittleEndian);
           }
           break;
       }

@@ -69,11 +69,11 @@ class EXIFInfo {
   int read(const unsigned char *data, unsigned long length);
 //  int read(const std::string &data);
   int read(std::string inputFile);
-  int write(std::string outputFile, const unsigned char *buf, unsigned long len);
+  int write(std::string outputFile);
   // Parsing function for an EXIF segment. This is used internally by
   // parseFrom() but can be called for special cases where only the EXIF section
   // is available (i.e., a blob starting with the bytes "Exif\0\0").
-  int parseFromEXIFSegment(const unsigned char *buf, unsigned long len);
+  int decodeEXIFsegment(const unsigned char *buf, unsigned long len);
 
   // Set all data members to default values.
   void clear();

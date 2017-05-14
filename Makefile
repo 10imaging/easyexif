@@ -1,5 +1,6 @@
 CXX=g++
-CXXFLAGS=-O2 -pedantic -Wall -Wextra -ansi -std=c++11
+#CXXFLAGS=-O2 -pedantic -Wall -Wextra -ansi -std=c++11
+CXXFLAGS=-g -pedantic -Wall -Wextra -ansi -std=c++11
 
 all: demo
 
@@ -19,6 +20,6 @@ test: demo valgrind
 	./test.sh
 
 valgrind: 
-	valgrind --leak-check=full ./demo test-images/test1.jpg
+	valgrind --leak-check=full --show-leak-kinds=all ./demo test-images/test1.jpg
 	
 contrib: format test valgrind

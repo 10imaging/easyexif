@@ -99,7 +99,7 @@ int main(int argc, char *argv[]) {
 
   result.UserComment = result.UserComment + std::string("   testing new EXIF UserComment TAG\n");
   std::string newOutput = std::string("test.jpg");
-  code = result.write(newOutput, buf, fsize);
+  code = result.write(newOutput);
   if (code) {
     printf("Error writing ''%s' : code %d\n", newOutput.c_str(), code);
     return -4;
