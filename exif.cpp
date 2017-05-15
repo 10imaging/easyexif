@@ -38,7 +38,7 @@
 using std::string;
 
 #ifndef DEBUG
-    #define DEBUG
+#define DEBUG
 #endif
 
 #ifdef DEBUG
@@ -312,8 +312,9 @@ SRational parse<SRational, false>(const unsigned char *buf) {
  *  false - something went wrong, vec's content was not touched
  */
 template <typename T, bool isLittleEndian, typename C>
-bool extract_values(C &container, const unsigned char *buf, const unsigned long base,
-                    const unsigned long len, const IFEntry &entry) {
+bool extract_values(C &container, const unsigned char *buf,
+                    const unsigned long base, const unsigned long len,
+                    const IFEntry &entry) {
   const unsigned char *data;
   uint32_t reversed_data;
   // if data fits into 4 bytes, they are stored directly in
@@ -376,7 +377,10 @@ void parseIFEntryHeader(const unsigned char *buf, IFEntry &result) {
   result.length(length);
   result.data(data);
 
-  VERBOSE(std::cerr << "\nIFD tag=0x" << std::hex << tag << "(" << std::dec << tag << ")" << " format=" << format << " length=" << length << std::dec);
+  VERBOSE(std::cerr << "\nIFD tag=0x" << std::hex << tag << "(" << std::dec
+                    << tag << ")"
+                    << " format=" << format << " length=" << length
+                    << std::dec);
 }
 
 template <bool isLittleEndian>
@@ -396,7 +400,7 @@ IFEntry parseIFEntry_temp(const unsigned char *buf, const unsigned long offs,
   switch (result.format()) {
     case 1:
       if (!extract_values<uint8_t, isLittleEndian>(result.val_byte(), buf, base,
-                                               len, result)) {
+                                                   len, result)) {
         result.tag(0xFF);
       }
       break;
@@ -404,8 +408,8 @@ IFEntry parseIFEntry_temp(const unsigned char *buf, const unsigned long offs,
       // string is basically sequence of uint8_t (well, according to EXIF even
       // uint7_t, but
       // we don't have that), so just read it as bytes
-      if (!extract_values<uint8_t, isLittleEndian>(result.val_string(), buf, base,
-                                               len, result)) {
+      if (!extract_values<uint8_t, isLittleEndian>(result.val_string(), buf,
+                                                   base, len, result)) {
         result.tag(0xFF);
       }
       // and cut zero byte at the end, since we don't want that in the
@@ -415,20 +419,20 @@ IFEntry parseIFEntry_temp(const unsigned char *buf, const unsigned long offs,
       }
       break;
     case 3:
-      if (!extract_values<uint16_t, isLittleEndian>(result.val_short(), buf, base,
-                                                len, result)) {
+      if (!extract_values<uint16_t, isLittleEndian>(result.val_short(), buf,
+                                                    base, len, result)) {
         result.tag(0xFF);
       }
       break;
     case 4:
-      if (!extract_values<uint32_t, isLittleEndian>(result.val_long(), buf, base,
-                                                len, result)) {
+      if (!extract_values<uint32_t, isLittleEndian>(result.val_long(), buf,
+                                                    base, len, result)) {
         result.tag(0xFF);
       }
       break;
     case 5:
       if (!extract_values<Rational, isLittleEndian>(result.val_rational(), buf,
-                                                base, len, result)) {
+                                                    base, len, result)) {
         result.tag(0xFF);
       }
       break;
@@ -437,11 +441,11 @@ IFEntry parseIFEntry_temp(const unsigned char *buf, const unsigned long offs,
       VERBOSE(std::cerr << " - unknown format");
       break;
     case 10:
-    if (!extract_values<SRational, isLittleEndian>(result.val_srational(), buf,
-                                              base, len, result)) {
-      result.tag(0xFF);
-    }
-    break;
+      if (!extract_values<SRational, isLittleEndian>(result.val_srational(),
+                                                     buf, base, len, result)) {
+        result.tag(0xFF);
+      }
+      break;
     default:
       result.tag(0xFF);
   }
@@ -553,10 +557,10 @@ int easyexif::EXIFInfo::read(std::string inputFile) {
   if (fread(buf, 1, fsize, fp) != fsize) {
     VERBOSE(std::cerr << "Cannot read file '" << inputFile << "'\n");
     delete[] buf;
-    fclose(fp);    
+    fclose(fp);
     return -2;
   }
-  
+
   fclose(fp);
   easyexif::EXIFInfo result;
   rval = result.read(buf, fsize);
@@ -567,9 +571,9 @@ int easyexif::EXIFInfo::read(std::string inputFile) {
 int easyexif::EXIFInfo::write(std::string outputFile) {
   int rval = 0;
   uint16_t JPEG_SOI = 0xD8FF, JPEG_EOI = 0xD9FF, EXIF_HEADER = 0xE1FF;
-  
+
   FILE *fp = fopen(outputFile.data(), "wb");
-  
+
   rval = (fwrite(&JPEG_SOI, 1, sizeof(JPEG_SOI), fp) == sizeof(JPEG_SOI));
   // EXIF header
   //   2 bytes: 0xFFE1 (big-endian) 0xE1FF (little-endian)
@@ -579,7 +583,9 @@ int easyexif::EXIFInfo::write(std::string outputFile) {
   //   2 bytes: TIFF magic (short 0x2a00 in Motorola byte order)
   //   4 bytes: Offset to first IFD
   //  16 bytes: TOTAL
-  if (rval) rval = (fwrite(&EXIF_HEADER, 1, sizeof(EXIF_HEADER), fp) == sizeof(EXIF_HEADER));
+  if (rval)
+    rval = (fwrite(&EXIF_HEADER, 1, sizeof(EXIF_HEADER), fp) ==
+            sizeof(EXIF_HEADER));
   // SECTION SIZE
   if (rval) rval = (fputs("Exif", fp) == 4);
   if (rval) rval = (fwrite("\0\0", 2, 1, fp) == 1);
@@ -589,7 +595,8 @@ int easyexif::EXIFInfo::write(std::string outputFile) {
   // EXIF IFD data
   // JPEG image data
   // JPEG footer 0xFFD9 (big-endian) 0xD9FF (little endian)
-  if (rval) rval = (fwrite(&JPEG_EOI, 1, sizeof(JPEG_EOI), fp) == sizeof(JPEG_EOI));
+  if (rval)
+    rval = (fwrite(&JPEG_EOI, 1, sizeof(JPEG_EOI), fp) == sizeof(JPEG_EOI));
 
   fclose(fp);
   return rval != 1;
@@ -601,9 +608,10 @@ int easyexif::EXIFInfo::write(std::string outputFile) {
 // PARAM: 'buf' start of the EXIF TIFF, which must be the bytes "Exif\0\0".
 // PARAM: 'len' length of buffer
 //
-int easyexif::EXIFInfo::decodeEXIFsegment(const unsigned char *buf, unsigned long len) {
+int easyexif::EXIFInfo::decodeEXIFsegment(const unsigned char *buf,
+                                          unsigned long len) {
   bool isLittleEndian = true;  // byte alignment (defined in EXIF header)
-  unsigned long offs = 0;       // current offset into buffer
+  unsigned long offs = 0;      // current offset into buffer
   if (!buf || len < 6) return PARSE_EXIF_ERROR_NO_EXIF;
 
   if (!std::equal(buf, buf + 6, "Exif\0\0")) return PARSE_EXIF_ERROR_NO_EXIF;
@@ -635,11 +643,13 @@ int easyexif::EXIFInfo::decodeEXIFsegment(const unsigned char *buf, unsigned lon
   if (0x2a != parse_value<uint16_t>(buf + offs, isLittleEndian))
     return PARSE_EXIF_ERROR_CORRUPT;
   offs += 2;
-  unsigned long first_ifd_offset = parse_value<uint32_t>(buf + offs, isLittleEndian);
+  unsigned long first_ifd_offset =
+      parse_value<uint32_t>(buf + offs, isLittleEndian);
   offs += first_ifd_offset - 4;
   if (offs >= len) return PARSE_EXIF_ERROR_CORRUPT;
-  VERBOSE(std::cerr << "First IFD offset: 0x" << std::hex << first_ifd_offset << std::dec << "\n");
-  
+  VERBOSE(std::cerr << "First IFD offset: 0x" << std::hex << first_ifd_offset
+                    << std::dec << "\n");
+
   // Now parsing the first Image File Directory (IFD0, for the main image).
   // An IFD consists of a variable number of 12-byte directory entries. The
   // first two bytes of the IFD section contain the number of directory
@@ -690,7 +700,7 @@ int easyexif::EXIFInfo::decodeEXIFsegment(const unsigned char *buf, unsigned lon
         if (result.format() == 5 && result.val_rational().size())
           this->Xresolution = result.val_rational().front();
         break;
-        
+
       case 0x11b:
         // Yresolution
         if (result.format() == 5 && result.val_rational().size())
@@ -727,9 +737,9 @@ int easyexif::EXIFInfo::decodeEXIFsegment(const unsigned char *buf, unsigned lon
         // EXIF SubIFD offset
         exif_sub_ifd_offset = tiff_header_start + result.data();
         break;
-        
+
       default:
-      VERBOSE(std::cerr << " - skipped ");
+        VERBOSE(std::cerr << " - skipped ");
     }
   }
 
@@ -843,8 +853,7 @@ int easyexif::EXIFInfo::decodeEXIFsegment(const unsigned char *buf, unsigned lon
 
         case 0x9290:
           // Subsecond time
-          if (result.format() == 2)
-            this->SubSecTime = result.val_string();
+          if (result.format() == 2) this->SubSecTime = result.val_string();
           break;
 
         case 0x9291:
@@ -915,7 +924,7 @@ int easyexif::EXIFInfo::decodeEXIFsegment(const unsigned char *buf, unsigned lon
           }
           break;
         default:
-        VERBOSE(std::cerr << " - skipped ");
+          VERBOSE(std::cerr << " - skipped ");
       }
       offs += 12;
     }
@@ -1087,4 +1096,3 @@ void easyexif::EXIFInfo::clear() {
   LensInfo.Make = "";
   LensInfo.Model = "";
 }
-

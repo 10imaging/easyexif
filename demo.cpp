@@ -1,12 +1,16 @@
 #include <stdio.h>
 #include "exif.h"
 
-const char * tr_ResolutionUnit(unsigned int ru) {
+const char *tr_ResolutionUnit(unsigned int ru) {
   switch (ru) {
-    case 1: return "none";
-    case 2: return "inches";
-    case 3: return "cm";
-    default: return "";
+    case 1:
+      return "none";
+    case 2:
+      return "inches";
+    case 3:
+      return "cm";
+    default:
+      return "";
   }
 }
 
@@ -52,8 +56,8 @@ int main(int argc, char *argv[]) {
   printf("Image orientation    : %d\n", result.Orientation);
   printf("Xresolution          : %.0f\n", result.Xresolution);
   printf("Yresolution          : %.0f\n", result.Yresolution);
-  printf("ResolutionUnit       : %d (%s)\n", result.ResolutionUnit, 
-          tr_ResolutionUnit(result.ResolutionUnit));
+  printf("ResolutionUnit       : %d (%s)\n", result.ResolutionUnit,
+         tr_ResolutionUnit(result.ResolutionUnit));
   printf("Image copyright      : %s\n", result.Copyright.c_str());
   printf("Image date/time      : %s\n", result.DateTime.c_str());
   printf("Original date/time   : %s\n", result.DateTimeOriginal.c_str());
@@ -97,14 +101,15 @@ int main(int argc, char *argv[]) {
   printf("Focal plane XRes     : %f\n", result.LensInfo.FocalPlaneXResolution);
   printf("Focal plane YRes     : %f\n", result.LensInfo.FocalPlaneYResolution);
 
-  result.UserComment = result.UserComment + std::string("   testing new EXIF UserComment TAG\n");
+  result.UserComment =
+      result.UserComment + std::string("   testing new EXIF UserComment TAG\n");
   std::string newOutput = std::string("test.jpg");
   code = result.write(newOutput);
   if (code) {
     printf("Error writing ''%s' : code %d\n", newOutput.c_str(), code);
     return -4;
   }
-  
+
   delete[] buf;
 
   return 0;
