@@ -437,6 +437,15 @@ IFEntry parseIFEntry_temp(const unsigned char *buf, const unsigned long offs,
       }
       break;
     case 7:
+      if (len <= 4) {
+        if (!extract_values<uint32_t, isLittleEndian>(result.val_long(), buf,
+                                                      base, len, result)) {
+          result.tag(0xFF);
+        } else {
+          VERBOSE(std::cerr << " - format 7 length > 4");
+        }
+      }
+      break;
     case 9:
       VERBOSE(std::cerr << " - unknown format");
       break;
@@ -531,8 +540,8 @@ int easyexif::EXIFInfo::read(const unsigned char *buf, unsigned long len) {
   if (offs + section_length > len || section_length < 16)
     return PARSE_EXIF_ERROR_CORRUPT;
   offs += 2;
-  VERBOSE(std::cerr << "section_length= " << section_length << "\n");
-
+  VERBOSE(std::cerr << "section_length= " << section_length << 
+    " section_addr= 0x" << std::hex << offs << std::dec << "\n");
   return decodeEXIFsegment(buf + offs, len - offs);
 }
 
@@ -647,8 +656,8 @@ int easyexif::EXIFInfo::decodeEXIFsegment(const unsigned char *buf,
       parse_value<uint32_t>(buf + offs, isLittleEndian);
   offs += first_ifd_offset - 4;
   if (offs >= len) return PARSE_EXIF_ERROR_CORRUPT;
-  VERBOSE(std::cerr << "First IFD offset: 0x" << std::hex << first_ifd_offset
-                    << std::dec << "\n");
+  VERBOSE(std::cerr << "First IFD offset: " << first_ifd_offset << " offset=0x" <<
+    std::hex << offs+6 << std::dec << "\n");
 
   // Now parsing the first Image File Directory (IFD0, for the main image).
   // An IFD consists of a variable number of 12-byte directory entries. The
@@ -722,7 +731,12 @@ int easyexif::EXIFInfo::decodeEXIFsegment(const unsigned char *buf,
         // EXIF/TIFF date/time of image modification
         if (result.format() == 2) this->DateTime = result.val_string();
         break;
-
+        
+      case 0x213:
+        // YCbCrPositioning
+        if (result.format() == 3 && result.val_short().size())
+          this->YCbCrPositioning = result.val_short().front();
+        break;
       case 0x8298:
         // Copyright information
         if (result.format() == 2) this->Copyright = result.val_string();
@@ -736,6 +750,7 @@ int easyexif::EXIFInfo::decodeEXIFsegment(const unsigned char *buf,
       case 0x8769:
         // EXIF SubIFD offset
         exif_sub_ifd_offset = tiff_header_start + result.data();
+        VERBOSE(std::cerr << " exif_sub_ifd_offset = " << exif_sub_ifd_offset);
         break;
 
       default:
@@ -750,6 +765,7 @@ int easyexif::EXIFInfo::decodeEXIFsegment(const unsigned char *buf,
   if (exif_sub_ifd_offset + 4 <= len) {
     offs = exif_sub_ifd_offset;
     int num_entries = parse_value<uint16_t>(buf + offs, isLittleEndian);
+    VERBOSE(std::cerr << "\nSubIFD entries: " << std::dec << num_entries);
     if (offs + 6 + 12 * num_entries > len) return PARSE_EXIF_ERROR_CORRUPT;
     offs += 2;
     while (--num_entries >= 0) {

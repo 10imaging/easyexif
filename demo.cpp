@@ -59,6 +59,7 @@ int main(int argc, char *argv[]) {
   printf("ResolutionUnit       : %d (%s)\n", result.ResolutionUnit,
          tr_ResolutionUnit(result.ResolutionUnit));
   printf("Image copyright      : %s\n", result.Copyright.c_str());
+  printf("YCbCrPositioning     : %d\n", result.YCbCrPositioning);
   printf("Image date/time      : %s\n", result.DateTime.c_str());
   printf("Original date/time   : %s\n", result.DateTimeOriginal.c_str());
   printf("Digitize date/time   : %s\n", result.DateTimeDigitized.c_str());
