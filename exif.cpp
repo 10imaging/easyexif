@@ -178,6 +178,10 @@ class IFEntry {
         delete val_rational_;
         val_rational_ = nullptr;
         break;
+      case 0x7:
+        delete val_byte_;
+        val_byte_ = nullptr;
+        break;
       case 0xA:
         delete val_srational_;
         val_srational_ = nullptr;
@@ -207,6 +211,9 @@ class IFEntry {
       case 0x5:
         val_rational_ = new rational_vector();
         break;
+      case 0x7:
+        val_byte_ = new byte_vector();
+        break;
       case 0xA:
         val_srational_ = new srational_vector();
         break;
@@ -215,92 +222,80 @@ class IFEntry {
       default:
         // should not get here
         // should I throw an exception or ...?
+        VERBOSE(std::cerr << "ERROR");
         break;
     }
   }
 };
 
 // Helper functions
-template <typename T, bool isLittleEndian>
-T parse(const unsigned char *buf);
+template <typename T>
+T parse(const unsigned char *buf, const bool);
 
 template <>
-uint8_t parse<uint8_t, false>(const unsigned char *buf) {
+uint8_t parse<uint8_t>(const unsigned char *buf, const bool isLittleEndian) {
+  isLittleEndian;
   return *buf;
 }
 
 template <>
-uint8_t parse<uint8_t, true>(const unsigned char *buf) {
-  return *buf;
+uint16_t parse<uint16_t>(const unsigned char *buf, const bool isLittleEndian) {
+  if (isLittleEndian) {
+    return (static_cast<uint16_t>(buf[1]) << 8) | buf[0];
+  } else {
+    return (static_cast<uint16_t>(buf[0]) << 8) | buf[1];
+  }
 }
 
 template <>
-uint16_t parse<uint16_t, false>(const unsigned char *buf) {
-  return (static_cast<uint16_t>(buf[0]) << 8) | buf[1];
+uint32_t parse<uint32_t>(const unsigned char *buf, const bool isLittleEndian) {
+  if (isLittleEndian) {
+    return (static_cast<uint32_t>(buf[3]) << 24) |
+           (static_cast<uint32_t>(buf[2]) << 16) |
+           (static_cast<uint32_t>(buf[1]) << 8) | buf[0];
+  } else {
+    return (static_cast<uint32_t>(buf[0]) << 24) |
+           (static_cast<uint32_t>(buf[1]) << 16) |
+           (static_cast<uint32_t>(buf[2]) << 8) | buf[3];
+  }
 }
 
 template <>
-uint16_t parse<uint16_t, true>(const unsigned char *buf) {
-  return (static_cast<uint16_t>(buf[1]) << 8) | buf[0];
+int32_t parse<int32_t>(const unsigned char *buf, const bool isLittleEndian) {
+  if (isLittleEndian) {
+    return (static_cast<int32_t>(buf[3]) << 24) |
+           (static_cast<int32_t>(buf[2]) << 16) |
+           (static_cast<int32_t>(buf[1]) << 8) | buf[0];
+  } else {
+    return (static_cast<int32_t>(buf[0]) << 24) |
+           (static_cast<int32_t>(buf[1]) << 16) |
+           (static_cast<int32_t>(buf[2]) << 8) | buf[3];
+  }
 }
 
 template <>
-uint32_t parse<uint32_t, false>(const unsigned char *buf) {
-  return (static_cast<uint32_t>(buf[0]) << 24) |
-         (static_cast<uint32_t>(buf[1]) << 16) |
-         (static_cast<uint32_t>(buf[2]) << 8) | buf[3];
-}
-
-template <>
-uint32_t parse<uint32_t, true>(const unsigned char *buf) {
-  return (static_cast<uint32_t>(buf[3]) << 24) |
-         (static_cast<uint32_t>(buf[2]) << 16) |
-         (static_cast<uint32_t>(buf[1]) << 8) | buf[0];
-}
-
-template <>
-int32_t parse<int32_t, false>(const unsigned char *buf) {
-  return (static_cast<int32_t>(buf[0]) << 24) |
-         (static_cast<int32_t>(buf[1]) << 16) |
-         (static_cast<int32_t>(buf[2]) << 8) | buf[3];
-}
-
-template <>
-int32_t parse<int32_t, true>(const unsigned char *buf) {
-  return (static_cast<int32_t>(buf[3]) << 24) |
-         (static_cast<int32_t>(buf[2]) << 16) |
-         (static_cast<int32_t>(buf[1]) << 8) | buf[0];
-}
-
-template <>
-Rational parse<Rational, true>(const unsigned char *buf) {
+Rational parse<Rational>(const unsigned char *buf, const bool isLittleEndian) {
   Rational r;
-  r.numerator = parse<uint32_t, true>(buf);
-  r.denominator = parse<uint32_t, true>(buf + 4);
+  if (isLittleEndian) {
+    r.numerator = parse<uint32_t>(buf, isLittleEndian);
+    r.denominator = parse<uint32_t>(buf + 4, isLittleEndian);
+  } else {
+    r.numerator = parse<uint32_t>(buf, isLittleEndian);
+    r.denominator = parse<uint32_t>(buf + 4, isLittleEndian);
+  }
   return r;
 }
 
 template <>
-Rational parse<Rational, false>(const unsigned char *buf) {
-  Rational r;
-  r.numerator = parse<uint32_t, false>(buf);
-  r.denominator = parse<uint32_t, false>(buf + 4);
-  return r;
-}
-
-template <>
-SRational parse<SRational, true>(const unsigned char *buf) {
+SRational parse<SRational>(const unsigned char *buf, const bool isLittleEndian) {
   SRational r;
-  r.numerator = parse<int32_t, true>(buf);
-  r.denominator = parse<int32_t, true>(buf + 4);
-  return r;
-}
-
-template <>
-SRational parse<SRational, false>(const unsigned char *buf) {
-  SRational r;
-  r.numerator = parse<int32_t, false>(buf);
-  r.denominator = parse<int32_t, false>(buf + 4);
+  if (isLittleEndian) {
+    r.numerator = parse<int32_t>(buf, isLittleEndian);
+    r.denominator = parse<int32_t>(buf + 4, isLittleEndian);
+  } else {
+    r.numerator = parse<int32_t>(buf, isLittleEndian);
+    r.denominator = parse<int32_t>(buf + 4, isLittleEndian);    
+  }
   return r;
 }
 
@@ -311,10 +306,11 @@ SRational parse<SRational, false>(const unsigned char *buf) {
  *  true  - entry.length() values were read
  *  false - something went wrong, vec's content was not touched
  */
-template <typename T, bool isLittleEndian, typename C>
-bool extract_values(C &container, const unsigned char *buf,
-                    const unsigned long base, const unsigned long len,
-                    const IFEntry &entry) {
+template <typename T, typename C>
+bool extract_values(C &container, const unsigned char *buf, 
+  const bool isLittleEndian, const unsigned long base, 
+  const unsigned long len, const IFEntry &entry)
+{
   const unsigned char *data;
   uint32_t reversed_data;
   // if data fits into 4 bytes, they are stored directly in
@@ -343,34 +339,33 @@ bool extract_values(C &container, const unsigned char *buf,
   }
   container.resize(entry.length());
   for (size_t i = 0; i < entry.length(); ++i) {
-    container[i] = parse<T, isLittleEndian>(data + sizeof(T) * i);
+    container[i] = parse<T>(data + sizeof(T) * i, isLittleEndian);
   }
   return true;
 }
 
-template <bool isLittleEndian>
-void parseIFEntryHeader(const unsigned char *buf, unsigned short &tag,
-                        unsigned short &format, unsigned &length,
-                        unsigned &data) {
+void parseIFEntryHeader(const unsigned char *buf, const bool isLittleEndian, 
+  unsigned short &tag, unsigned short &format, unsigned &length,
+  unsigned &data) {
   // Each directory entry is composed of:
   // 2 bytes: tag number (data field)
   // 2 bytes: data format
   // 4 bytes: number of components
   // 4 bytes: data value or offset to data value
-  tag = parse<uint16_t, isLittleEndian>(buf);
-  format = parse<uint16_t, isLittleEndian>(buf + 2);
-  length = parse<uint32_t, isLittleEndian>(buf + 4);
-  data = parse<uint32_t, isLittleEndian>(buf + 8);
+  tag = parse<uint16_t>(buf, isLittleEndian);
+  format = parse<uint16_t>(buf + 2, isLittleEndian);
+  length = parse<uint32_t>(buf + 4, isLittleEndian);
+  data = parse<uint32_t>(buf + 8, isLittleEndian);
 }
 
-template <bool isLittleEndian>
-void parseIFEntryHeader(const unsigned char *buf, IFEntry &result) {
+void parseIFEntryHeader(const unsigned char *buf, bool isLittleEndian, 
+  IFEntry &result) {
   unsigned short tag;
   unsigned short format;
   unsigned length;
   unsigned data;
 
-  parseIFEntryHeader<isLittleEndian>(buf, tag, format, length, data);
+  parseIFEntryHeader(buf, isLittleEndian, tag, format, length, data);
 
   result.tag(tag);
   result.format(format);
@@ -383,9 +378,8 @@ void parseIFEntryHeader(const unsigned char *buf, IFEntry &result) {
                     << std::dec);
 }
 
-template <bool isLittleEndian>
-IFEntry parseIFEntry_temp(const unsigned char *buf, const unsigned long offs,
-                          const unsigned long base, const unsigned long len) {
+IFEntry parseIFEntry(const unsigned char *buf, const unsigned long offs, 
+  bool isLittleEndian, const unsigned long base, const unsigned long len) {
   IFEntry result;
 
   // check if there even is enough data for IFEntry in the buffer
@@ -394,12 +388,12 @@ IFEntry parseIFEntry_temp(const unsigned char *buf, const unsigned long offs,
     return result;
   }
 
-  parseIFEntryHeader<isLittleEndian>(buf + offs, result);
+  parseIFEntryHeader(buf + offs, isLittleEndian, result);
 
   // Parse value in specified format
   switch (result.format()) {
     case 1:
-      if (!extract_values<uint8_t, isLittleEndian>(result.val_byte(), buf, base,
+      if (!extract_values<uint8_t>(result.val_byte(), buf, base, isLittleEndian,
                                                    len, result)) {
         result.tag(0xFF);
       }
@@ -408,7 +402,7 @@ IFEntry parseIFEntry_temp(const unsigned char *buf, const unsigned long offs,
       // string is basically sequence of uint8_t (well, according to EXIF even
       // uint7_t, but
       // we don't have that), so just read it as bytes
-      if (!extract_values<uint8_t, isLittleEndian>(result.val_string(), buf,
+      if (!extract_values<uint8_t>(result.val_string(), buf, isLittleEndian,
                                                    base, len, result)) {
         result.tag(0xFF);
       }
@@ -419,30 +413,34 @@ IFEntry parseIFEntry_temp(const unsigned char *buf, const unsigned long offs,
       }
       break;
     case 3:
-      if (!extract_values<uint16_t, isLittleEndian>(result.val_short(), buf,
-                                                    base, len, result)) {
+      if (!extract_values<uint16_t>(result.val_short(), buf, isLittleEndian,
+                                    base, len, result)) {
         result.tag(0xFF);
       }
       break;
     case 4:
-      if (!extract_values<uint32_t, isLittleEndian>(result.val_long(), buf,
-                                                    base, len, result)) {
+      if (!extract_values<uint32_t>(result.val_long(), buf, isLittleEndian,
+                                    base, len, result)) {
         result.tag(0xFF);
       }
       break;
     case 5:
-      if (!extract_values<Rational, isLittleEndian>(result.val_rational(), buf,
-                                                    base, len, result)) {
+      if (!extract_values<Rational>(result.val_rational(), buf, isLittleEndian,
+                                    base, len, result)) {
         result.tag(0xFF);
       }
       break;
     case 7:
-      if (len <= 4) {
-        if (!extract_values<uint32_t, isLittleEndian>(result.val_long(), buf,
-                                                      base, len, result)) {
+      VERBOSE(std::cerr << " - format 7 length " << result.length());
+      if (result.length() <= 4) {
+        if (!extract_values<uint32_t>(result.val_long(), buf, isLittleEndian,
+                                      base, len, result)) {
           result.tag(0xFF);
-        } else {
-          VERBOSE(std::cerr << " - format 7 length > 4");
+        }
+      } else {
+        if (!extract_values<uint8_t>(result.val_byte(), buf, base, isLittleEndian,
+                                     len, result)) {
+          result.tag(0xFF);
         }
       }
       break;
@@ -450,8 +448,8 @@ IFEntry parseIFEntry_temp(const unsigned char *buf, const unsigned long offs,
       VERBOSE(std::cerr << " - unknown format");
       break;
     case 10:
-      if (!extract_values<SRational, isLittleEndian>(result.val_srational(),
-                                                     buf, base, len, result)) {
+      if (!extract_values<SRational>(result.val_srational(), buf, isLittleEndian, 
+                                     base, len, result)) {
         result.tag(0xFF);
       }
       break;
@@ -464,32 +462,9 @@ IFEntry parseIFEntry_temp(const unsigned char *buf, const unsigned long offs,
 // helper functions for convinience
 template <typename T>
 T parse_value(const unsigned char *buf, bool isLittleEndian) {
-  if (isLittleEndian) {
-    return parse<T, true>(buf);
-  } else {
-    return parse<T, false>(buf);
-  }
+  return parse<T>(buf, isLittleEndian);
 }
 
-void parseIFEntryHeader(const unsigned char *buf, bool isLittleEndian,
-                        unsigned short &tag, unsigned short &format,
-                        unsigned &length, unsigned &data) {
-  if (isLittleEndian) {
-    parseIFEntryHeader<true>(buf, tag, format, length, data);
-  } else {
-    parseIFEntryHeader<false>(buf, tag, format, length, data);
-  }
-}
-
-IFEntry parseIFEntry(const unsigned char *buf, const unsigned long offs,
-                     const bool isLittleEndian, const unsigned long base,
-                     const unsigned long len) {
-  if (isLittleEndian) {
-    return parseIFEntry_temp<true>(buf, offs, base, len);
-  } else {
-    return parseIFEntry_temp<false>(buf, offs, base, len);
-  }
-}
 }  // namespace
 
 //
@@ -796,6 +771,12 @@ int easyexif::EXIFInfo::decodeEXIFsegment(const unsigned char *buf,
             this->ISOSpeedRatings = result.val_short().front();
           break;
 
+        case 0x9000:
+          // ExifVersion
+          if (result.format() == 7)
+              this->ExifVersion = result.val_byte().front();
+          break;
+
         case 0x9003:
           // Original date and time
           if (result.format() == 2)
@@ -1063,6 +1044,7 @@ void easyexif::EXIFInfo::clear() {
   DateTimeDigitized = "";
   SubSecTimeOriginal = "";
   Copyright = "";
+  ExifVersion = "";
 
   // Shorts / unsigned / double
   ByteAlign = 0;

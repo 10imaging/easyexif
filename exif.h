@@ -92,7 +92,8 @@ class EXIFInfo {
                                   // 2 = inches
                                   // 3 = cm
   std::string Software;           // Software used
-  unsigned short YCbCrPositioning;// 1 = Centered, 2 = Co-sited 
+  unsigned short YCbCrPositioning;// 1 = Centered, 2 = Co-sited
+  std::string ExifVersion;
   std::string DateTime;           // File change date and time
   std::string DateTimeOriginal;   // Original file date and time (may not exist)
   std::string DateTimeDigitized;  // Digitization date and time (may not exist)
