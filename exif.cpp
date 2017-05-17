@@ -28,444 +28,14 @@
   NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
   EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-#include "exif.h"
-
-#include <stdio.h>
-#include <algorithm>
-#include <cstdint>
-#include <vector>
-
-using std::string;
 
 #ifndef DEBUG
 #define DEBUG
 #endif
 
-#ifdef DEBUG
-#include <iostream>
-#define VERBOSE(a) (a)
-#else
-#define VERBOSE(a)
-#endif
+#include "exif.h"
 
-namespace {
-
-struct Rational {
-  uint32_t numerator, denominator;
-  operator double() const {
-    if (denominator < 1e-20) {
-      return 0;
-    }
-    return static_cast<double>(numerator) / static_cast<double>(denominator);
-  }
-};
-
-struct SRational {
-  int32_t numerator, denominator;
-  operator double() const {
-    if (denominator < 1e-20) {
-      return 0;
-    }
-    return static_cast<double>(numerator) / static_cast<double>(denominator);
-  }
-};
-
-// IF Entry
-class IFEntry {
- public:
-  using byte_vector = std::vector<uint8_t>;
-  using ascii_vector = std::string;
-  using short_vector = std::vector<uint16_t>;
-  using long_vector = std::vector<uint32_t>;
-  using rational_vector = std::vector<Rational>;
-  using srational_vector = std::vector<SRational>;
-
-  IFEntry()
-      : tag_(0xFF), format_(0xFF), data_(0), length_(0), val_byte_(nullptr) {}
-  IFEntry(const IFEntry &) = delete;
-  IFEntry &operator=(const IFEntry &) = delete;
-  IFEntry(IFEntry &&other)
-      : tag_(other.tag_),
-        format_(other.format_),
-        data_(other.data_),
-        length_(other.length_),
-        val_byte_(other.val_byte_) {
-    other.tag_ = 0xFF;
-    other.format_ = 0xFF;
-    other.data_ = 0;
-    other.length_ = 0;
-    other.val_byte_ = nullptr;
-  }
-  ~IFEntry() { delete_union(); }
-  unsigned short tag() const { return tag_; }
-  void tag(unsigned short tag) { tag_ = tag; }
-  unsigned short format() const { return format_; }
-  bool format(unsigned short format) {
-    switch (format) {
-      case 0x01:
-      case 0x02:
-      case 0x03:
-      case 0x04:
-      case 0x05:
-      case 0x07:
-      case 0x09:
-      case 0x0a:
-      case 0xff:
-        break;
-      default:
-        return false;
-    }
-    delete_union();
-    format_ = format;
-    new_union();
-    return true;
-  }
-  unsigned data() const { return data_; }
-  void data(unsigned data) { data_ = data; }
-  unsigned length() const { return length_; }
-  void length(unsigned length) { length_ = length; }
-
-  // functions to access the data
-  //
-  // !! it's CALLER responsibility to check that format !!
-  // !! is correct before accessing it's field          !!
-  //
-  // - getters are use here to allow future addition
-  //   of checks if format is correct
-  byte_vector &val_byte() { return *val_byte_; }
-  ascii_vector &val_string() { return *val_string_; }
-  short_vector &val_short() { return *val_short_; }
-  long_vector &val_long() { return *val_long_; }
-  rational_vector &val_rational() { return *val_rational_; }
-  srational_vector &val_srational() { return *val_srational_; }
-
- private:
-  // Raw fields
-  unsigned short tag_;
-  unsigned short format_;
-  unsigned data_;
-  unsigned length_;
-
-  // Parsed fields
-  union {
-    byte_vector *val_byte_;
-    ascii_vector *val_string_;
-    short_vector *val_short_;
-    long_vector *val_long_;
-    rational_vector *val_rational_;
-    srational_vector *val_srational_;
-  };
-
-  void delete_union() {
-    switch (format_) {
-      case 0x1:
-        delete val_byte_;
-        val_byte_ = nullptr;
-        break;
-      case 0x2:
-        delete val_string_;
-        val_string_ = nullptr;
-        break;
-      case 0x3:
-        delete val_short_;
-        val_short_ = nullptr;
-        break;
-      case 0x4:
-        delete val_long_;
-        val_long_ = nullptr;
-        break;
-      case 0x5:
-        delete val_rational_;
-        val_rational_ = nullptr;
-        break;
-      case 0x7:
-        delete val_byte_;
-        val_byte_ = nullptr;
-        break;
-      case 0xA:
-        delete val_srational_;
-        val_srational_ = nullptr;
-        break;
-      case 0xff:
-        break;
-      default:
-        // should not get here
-        // should I throw an exception or ...?
-        break;
-    }
-  }
-  void new_union() {
-    switch (format_) {
-      case 0x1:
-        val_byte_ = new byte_vector();
-        break;
-      case 0x2:
-        val_string_ = new ascii_vector();
-        break;
-      case 0x3:
-        val_short_ = new short_vector();
-        break;
-      case 0x4:
-        val_long_ = new long_vector();
-        break;
-      case 0x5:
-        val_rational_ = new rational_vector();
-        break;
-      case 0x7:
-        val_byte_ = new byte_vector();
-        break;
-      case 0xA:
-        val_srational_ = new srational_vector();
-        break;
-      case 0xff:
-        break;
-      default:
-        // should not get here
-        // should I throw an exception or ...?
-        VERBOSE(std::cerr << "ERROR");
-        break;
-    }
-  }
-};
-
-// Helper functions
-template <typename T>
-T parse(const unsigned char *buf, const bool);
-
-template <>
-uint8_t parse<uint8_t>(const unsigned char *buf, const bool isLittleEndian) {
-  isLittleEndian;
-  return *buf;
-}
-
-template <>
-uint16_t parse<uint16_t>(const unsigned char *buf, const bool isLittleEndian) {
-  if (isLittleEndian) {
-    return (static_cast<uint16_t>(buf[1]) << 8) | buf[0];
-  } else {
-    return (static_cast<uint16_t>(buf[0]) << 8) | buf[1];
-  }
-}
-
-template <>
-uint32_t parse<uint32_t>(const unsigned char *buf, const bool isLittleEndian) {
-  if (isLittleEndian) {
-    return (static_cast<uint32_t>(buf[3]) << 24) |
-           (static_cast<uint32_t>(buf[2]) << 16) |
-           (static_cast<uint32_t>(buf[1]) << 8) | buf[0];
-  } else {
-    return (static_cast<uint32_t>(buf[0]) << 24) |
-           (static_cast<uint32_t>(buf[1]) << 16) |
-           (static_cast<uint32_t>(buf[2]) << 8) | buf[3];
-  }
-}
-
-template <>
-int32_t parse<int32_t>(const unsigned char *buf, const bool isLittleEndian) {
-  if (isLittleEndian) {
-    return (static_cast<int32_t>(buf[3]) << 24) |
-           (static_cast<int32_t>(buf[2]) << 16) |
-           (static_cast<int32_t>(buf[1]) << 8) | buf[0];
-  } else {
-    return (static_cast<int32_t>(buf[0]) << 24) |
-           (static_cast<int32_t>(buf[1]) << 16) |
-           (static_cast<int32_t>(buf[2]) << 8) | buf[3];
-  }
-}
-
-template <>
-Rational parse<Rational>(const unsigned char *buf, const bool isLittleEndian) {
-  Rational r;
-  if (isLittleEndian) {
-    r.numerator = parse<uint32_t>(buf, isLittleEndian);
-    r.denominator = parse<uint32_t>(buf + 4, isLittleEndian);
-  } else {
-    r.numerator = parse<uint32_t>(buf, isLittleEndian);
-    r.denominator = parse<uint32_t>(buf + 4, isLittleEndian);
-  }
-  return r;
-}
-
-template <>
-SRational parse<SRational>(const unsigned char *buf, const bool isLittleEndian) {
-  SRational r;
-  if (isLittleEndian) {
-    r.numerator = parse<int32_t>(buf, isLittleEndian);
-    r.denominator = parse<int32_t>(buf + 4, isLittleEndian);
-  } else {
-    r.numerator = parse<int32_t>(buf, isLittleEndian);
-    r.denominator = parse<int32_t>(buf + 4, isLittleEndian);    
-  }
-  return r;
-}
-
-/**
- * Try to read entry.length() values for this entry.
- *
- * Returns:
- *  true  - entry.length() values were read
- *  false - something went wrong, vec's content was not touched
- */
-template <typename T, typename C>
-bool extract_values(C &container, const unsigned char *buf, 
-  const bool isLittleEndian, const unsigned long base, 
-  const unsigned long len, const IFEntry &entry)
-{
-  const unsigned char *data;
-  uint32_t reversed_data;
-  // if data fits into 4 bytes, they are stored directly in
-  // the data field in IFEntry
-  if (sizeof(T) * entry.length() <= 4) {
-    if (isLittleEndian) {
-      reversed_data = entry.data();
-    } else {
-      reversed_data = entry.data();
-      // this reversing works, but is ugly
-      unsigned char *data = reinterpret_cast<unsigned char *>(&reversed_data);
-      unsigned char tmp;
-      tmp = data[0];
-      data[0] = data[3];
-      data[3] = tmp;
-      tmp = data[1];
-      data[1] = data[2];
-      data[2] = tmp;
-    }
-    data = reinterpret_cast<const unsigned char *>(&(reversed_data));
-  } else {
-    data = buf + base + entry.data();
-    if (data + sizeof(T) * entry.length() > buf + len) {
-      return false;
-    }
-  }
-  container.resize(entry.length());
-  for (size_t i = 0; i < entry.length(); ++i) {
-    container[i] = parse<T>(data + sizeof(T) * i, isLittleEndian);
-  }
-  return true;
-}
-
-void parseIFEntryHeader(const unsigned char *buf, const bool isLittleEndian, 
-  unsigned short &tag, unsigned short &format, unsigned &length,
-  unsigned &data) {
-  // Each directory entry is composed of:
-  // 2 bytes: tag number (data field)
-  // 2 bytes: data format
-  // 4 bytes: number of components
-  // 4 bytes: data value or offset to data value
-  tag = parse<uint16_t>(buf, isLittleEndian);
-  format = parse<uint16_t>(buf + 2, isLittleEndian);
-  length = parse<uint32_t>(buf + 4, isLittleEndian);
-  data = parse<uint32_t>(buf + 8, isLittleEndian);
-}
-
-void parseIFEntryHeader(const unsigned char *buf, bool isLittleEndian, 
-  IFEntry &result) {
-  unsigned short tag;
-  unsigned short format;
-  unsigned length;
-  unsigned data;
-
-  parseIFEntryHeader(buf, isLittleEndian, tag, format, length, data);
-
-  result.tag(tag);
-  result.format(format);
-  result.length(length);
-  result.data(data);
-
-  VERBOSE(std::cerr << "\nIFD tag=0x" << std::hex << tag << "(" << std::dec
-                    << tag << ")"
-                    << " format=" << format << " length=" << length
-                    << std::dec);
-}
-
-IFEntry parseIFEntry(const unsigned char *buf, const unsigned long offs, 
-  bool isLittleEndian, const unsigned long base, const unsigned long len) {
-  IFEntry result;
-
-  // check if there even is enough data for IFEntry in the buffer
-  if (buf + offs + 12 > buf + len) {
-    result.tag(0xFF);
-    return result;
-  }
-
-  parseIFEntryHeader(buf + offs, isLittleEndian, result);
-
-  // Parse value in specified format
-  switch (result.format()) {
-    case 1:
-      if (!extract_values<uint8_t>(result.val_byte(), buf, base, isLittleEndian,
-                                                   len, result)) {
-        result.tag(0xFF);
-      }
-      break;
-    case 2:
-      // string is basically sequence of uint8_t (well, according to EXIF even
-      // uint7_t, but
-      // we don't have that), so just read it as bytes
-      if (!extract_values<uint8_t>(result.val_string(), buf, isLittleEndian,
-                                                   base, len, result)) {
-        result.tag(0xFF);
-      }
-      // and cut zero byte at the end, since we don't want that in the
-      // std::string
-      if (result.val_string()[result.val_string().length() - 1] == '\0') {
-        result.val_string().resize(result.val_string().length() - 1);
-      }
-      break;
-    case 3:
-      if (!extract_values<uint16_t>(result.val_short(), buf, isLittleEndian,
-                                    base, len, result)) {
-        result.tag(0xFF);
-      }
-      break;
-    case 4:
-      if (!extract_values<uint32_t>(result.val_long(), buf, isLittleEndian,
-                                    base, len, result)) {
-        result.tag(0xFF);
-      }
-      break;
-    case 5:
-      if (!extract_values<Rational>(result.val_rational(), buf, isLittleEndian,
-                                    base, len, result)) {
-        result.tag(0xFF);
-      }
-      break;
-    case 7:
-      VERBOSE(std::cerr << " - format 7 length " << result.length());
-      if (result.length() <= 4) {
-        if (!extract_values<uint32_t>(result.val_long(), buf, isLittleEndian,
-                                      base, len, result)) {
-          result.tag(0xFF);
-        }
-      } else {
-        if (!extract_values<uint8_t>(result.val_byte(), buf, base, isLittleEndian,
-                                     len, result)) {
-          result.tag(0xFF);
-        }
-      }
-      break;
-    case 9:
-      VERBOSE(std::cerr << " - unknown format");
-      break;
-    case 10:
-      if (!extract_values<SRational>(result.val_srational(), buf, isLittleEndian, 
-                                     base, len, result)) {
-        result.tag(0xFF);
-      }
-      break;
-    default:
-      result.tag(0xFF);
-  }
-  return result;
-}
-
-// helper functions for convinience
-template <typename T>
-T parse_value(const unsigned char *buf, bool isLittleEndian) {
-  return parse<T>(buf, isLittleEndian);
-}
-
-}  // namespace
+using std::string;
 
 //
 // Locates the EXIF segment and parses it using decodeEXIFsegment
@@ -517,7 +87,8 @@ int easyexif::EXIFInfo::read(const unsigned char *buf, unsigned long len) {
   offs += 2;
   VERBOSE(std::cerr << "section_length= " << section_length << 
     " section_addr= 0x" << std::hex << offs << std::dec << "\n");
-  return decodeEXIFsegment(buf + offs, len - offs);
+  std::vector<IFEntry> IFentries;
+  return decodeEXIFsegment(buf + offs, len - offs, IFentries);
 }
 
 /*
@@ -592,8 +163,11 @@ int easyexif::EXIFInfo::write(std::string outputFile) {
 // PARAM: 'buf' start of the EXIF TIFF, which must be the bytes "Exif\0\0".
 // PARAM: 'len' length of buffer
 //
-int easyexif::EXIFInfo::decodeEXIFsegment(const unsigned char *buf,
-                                          unsigned long len) {
+int easyexif::EXIFInfo::decodeEXIFsegment(
+  const unsigned char *buf,
+  unsigned long len,
+  std::vector<IFEntry> &IFentries)
+{
   bool isLittleEndian = true;  // byte alignment (defined in EXIF header)
   unsigned long offs = 0;      // current offset into buffer
   if (!buf || len < 6) return PARSE_EXIF_ERROR_NO_EXIF;
@@ -648,8 +222,8 @@ int easyexif::EXIFInfo::decodeEXIFsegment(const unsigned char *buf,
   unsigned long exif_sub_ifd_offset = len;
   unsigned long gps_sub_ifd_offset = len;
   while (--num_entries >= 0) {
-    IFEntry result =
-        parseIFEntry(buf, offs, isLittleEndian, tiff_header_start, len);
+    IFEntry result = parseIFEntry(buf, offs, isLittleEndian, tiff_header_start, len);
+    IFentries.push_back(result);
     offs += 12;
     switch (result.tag()) {
       case 0x102:
@@ -744,8 +318,8 @@ int easyexif::EXIFInfo::decodeEXIFsegment(const unsigned char *buf,
     if (offs + 6 + 12 * num_entries > len) return PARSE_EXIF_ERROR_CORRUPT;
     offs += 2;
     while (--num_entries >= 0) {
-      IFEntry result =
-          parseIFEntry(buf, offs, isLittleEndian, tiff_header_start, len);
+      IFEntry result = parseIFEntry(buf, offs, isLittleEndian, tiff_header_start, len);
+      IFentries.push_back(result);
       switch (result.tag()) {
         case 0x829a:
           // Exposure time in seconds
@@ -774,7 +348,7 @@ int easyexif::EXIFInfo::decodeEXIFsegment(const unsigned char *buf,
         case 0x9000:
           // ExifVersion
           if (result.format() == 7)
-              this->ExifVersion = result.val_byte().front();
+            this->ExifVersion = std::string(result.val_byte().begin(), result.val_byte().end());
           break;
 
         case 0x9003:
@@ -789,6 +363,15 @@ int easyexif::EXIFInfo::decodeEXIFsegment(const unsigned char *buf,
             this->DateTimeDigitized = result.val_string();
           break;
 
+        case 0x9101:
+          // ComponentsConfiguration
+          if (result.format() == 7 && result.length() == 4) {
+            this->ComponentsConfiguration[0] = result.val_byte()[0];
+            this->ComponentsConfiguration[1] = result.val_byte()[1];
+            this->ComponentsConfiguration[2] = result.val_byte()[2];
+            this->ComponentsConfiguration[3] = result.val_byte()[3];
+          }
+          break;
         case 0x9201:
           // Shutter speed value
           if (result.format() == 5 && result.val_rational().size())
@@ -811,6 +394,12 @@ int easyexif::EXIFInfo::decodeEXIFsegment(const unsigned char *buf,
           // Exposure bias value
           if (result.format() == 5 && result.val_rational().size())
             this->ExposureBiasValue = result.val_rational().front();
+          break;
+
+        case 0x9205:
+          // MaxApertureValue
+          if (result.format() == 5 && result.val_rational().size())
+            this->MaxApertureValue = result.val_rational().front();
           break;
 
         case 0x9206:
@@ -842,6 +431,12 @@ int easyexif::EXIFInfo::decodeEXIFsegment(const unsigned char *buf,
             this->MeteringMode = result.val_short().front();
           break;
 
+        case 0x927c:
+          // MakerNote
+          if (result.format() == 7)
+            //this->MakerNote = std::vector(result.val_byte().begin(), result.val_byte().end());
+          break;
+          
         case 0x9286:
           // User comment
           if (result.format() == 2)
@@ -857,6 +452,25 @@ int easyexif::EXIFInfo::decodeEXIFsegment(const unsigned char *buf,
           // Subsecond original time
           if (result.format() == 2)
             this->SubSecTimeOriginal = result.val_string();
+          break;
+
+        case 0x9292:
+          // SubSecTimeDigitized
+          if (result.format() == 2)
+            this->SubSecTimeDigitized = result.val_string();
+          break;
+
+        case 0xa000:
+          // FlashpixVersion
+          if (result.format() == 7 && result.length() == 4) {
+            this->FlashpixVersion = std::string(result.val_byte().begin(), result.val_byte().end());
+          }
+          break;
+
+        case 0xa001:
+          // ColorSpace
+          if (result.format() == 3 && result.val_short().size())
+            this->ColorSpace = result.val_short().front();
           break;
 
         case 0xa002:
@@ -875,6 +489,12 @@ int easyexif::EXIFInfo::decodeEXIFsegment(const unsigned char *buf,
             this->ImageHeight = result.val_short().front();
           break;
 
+        case 0xa005:
+          // InteropOffset
+          if (result.format() == 4 && result.val_long().size())
+            this->InteropOffset = result.val_long().front();
+          break;
+
         case 0xa20e:
           // EXIF Focal plane X-resolution
           if (result.format() == 5) {
@@ -889,10 +509,43 @@ int easyexif::EXIFInfo::decodeEXIFsegment(const unsigned char *buf,
           }
           break;
 
+        case 0xa301:
+          // SceneType
+          if (result.format() == 7 && result.length() == 1) {
+            this->SceneType = ((unsigned *)result.val_byte().data())[0];
+          }
+        case 0xa401:
+          // CustomRendered
+          if (result.format() == 3) {
+            this->CustomRendered = result.val_short().front();
+          }
+          break;
+
+        case 0xa402:
+          // ExposureMode
+          if (result.format() == 3) {
+            this->ExposureMode = result.val_short().front();
+          }
+          break;
+
+        case 0xa403:
+          // WhiteBalance
+          if (result.format() == 3) {
+            this->WhiteBalance = result.val_short().front();
+          }
+          break;
+
         case 0xa405:
           // Focal length in 35mm film
           if (result.format() == 3 && result.val_short().size())
             this->FocalLengthIn35mm = result.val_short().front();
+          break;
+
+        case 0xa406:
+          // SceneCaptureType
+          if (result.format() == 3) {
+            this->SceneCaptureType = result.val_short().front();
+          }
           break;
 
         case 0xa432:
@@ -1042,14 +695,17 @@ void easyexif::EXIFInfo::clear() {
   DateTime = "";
   DateTimeOriginal = "";
   DateTimeDigitized = "";
+  SubSecTime = "";
   SubSecTimeOriginal = "";
+  SubSecTimeDigitized = "";
   Copyright = "";
   ExifVersion = "";
+  FlashpixVersion = "";
+  UserComment = "";
 
   // Shorts / unsigned / double
   ByteAlign = 0;
   Orientation = 0;
-
   BitsPerSample = 0;
   ExposureTime = 0;
   FNumber = 0;
@@ -1066,8 +722,21 @@ void easyexif::EXIFInfo::clear() {
   MeteringMode = 0;
   ImageWidth = 0;
   ImageHeight = 0;
+  ColorSpace = 0;
+  InteropOffset = 0;
+  CustomRendered = 0;
+  ExposureMode = 0;
+  WhiteBalance = 0;
+  SceneCaptureType = 0;
+  SceneType = 0;
   Xresolution = 0;
   Yresolution = 0;
+  ResolutionUnit = 0;
+  ComponentsConfiguration[0] = 0;
+  ComponentsConfiguration[1] = 0;
+  ComponentsConfiguration[2] = 0;
+  ComponentsConfiguration[3] = 0;
+  YCbCrPositioning = 0;
 
   // Geolocation
   GeoLocation.Latitude = 0;

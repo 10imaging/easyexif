@@ -1,6 +1,6 @@
 CXX=g++
 #CXXFLAGS=-O2 -pedantic -Wall -Wextra -ansi -std=c++11
-CXXFLAGS=-g -pedantic -Wall -Wextra -ansi -std=c++11
+CXXFLAGS=-g -pedantic -Wall -Wextra -Wno-unused-parameter -ansi -std=c++11
 
 all: demo
 
