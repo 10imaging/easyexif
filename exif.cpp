@@ -30,7 +30,7 @@
 */
 
 #ifndef DEBUG
-#define DEBUG
+//#define DEBUG
 #endif
 
 #include "exif.h"
