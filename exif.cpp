@@ -319,7 +319,7 @@ int easyexif::EXIFInfo::decodeEXIFsegment(
     offs += 2;
     while (--num_entries >= 0) {
       IFEntry result = parseIFEntry(buf, offs, isLittleEndian, tiff_header_start, len);
-      IFentries.push_back(result);
+      //IFentries.push_back(result);
       switch (result.tag()) {
         case 0x829a:
           // Exposure time in seconds

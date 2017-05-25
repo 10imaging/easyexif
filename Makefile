@@ -4,7 +4,7 @@ CXXFLAGS=-g -pedantic -Wall -Wextra -Wno-unused-parameter -ansi -std=c++11
 
 all: demo
 
-exif.o: exif.cpp
+exif.o: exif.cpp exif.h
 	$(CXX) $(CXXFLAGS) -c exif.cpp
 
 demo: exif.o demo.cpp

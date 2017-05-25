@@ -91,12 +91,32 @@ class IFEntry {
   using long_vector = std::vector<uint32_t>;
   using rational_vector = std::vector<Rational>;
   using srational_vector = std::vector<SRational>;
+  bool isDecoded;
 
   IFEntry()
-      : tag_(0xFF), format_(0xFF), data_(0), length_(0), val_byte_(nullptr) {}
+      : isDecoded(false), tag_(0xFF), format_(0xFF), data_(0), length_(0), val_byte_(nullptr) {}
+  IFEntry(const IFEntry &other) {
+    this->tag_ = other.tag_;
+    this->format_ = other.format_;
+    this->data_ = other.data_;
+    this->val_byte_ = other.val_byte_;
+  }
+  IFEntry(const IFEntry *other) {
+    this->tag_ = other->tag_;
+    this->format_ = other->format_;
+    this->data_ = other->data_;
+    this->val_byte_ = other->val_byte_;
+  }
   /*
-  IFEntry(const IFEntry &) = delete;
-  IFEntry& operator= (const IFEntry &) = delete;
+  IFEntry& operator= (const IFEntry &other) {
+    this->tag_ = other.tag_;
+    this->format_ = other.format_;
+    this->data_ = other.data_;
+    this->val_byte_ = other.val_byte_;
+    this->isDecoded = other.isDecoded;
+    return *this;
+  }
+   */
   IFEntry(IFEntry &&other)
       : tag_(other.tag_),
         format_(other.format_),
@@ -110,7 +130,6 @@ class IFEntry {
     other.val_byte_ = nullptr;
   }
   ~IFEntry() { delete_union(); }
-  */
   unsigned short tag() const { return tag_; }
   void tag(unsigned short tag) { tag_ = tag; }
   unsigned short format() const { return format_; }
@@ -173,31 +192,31 @@ class IFEntry {
   void delete_union() {
     switch (format_) {
       case 0x1:
-        delete val_byte_;
+        if (val_byte_) delete val_byte_;
         val_byte_ = nullptr;
         break;
       case 0x2:
-        delete val_string_;
+        if (val_string_) delete val_string_;
         val_string_ = nullptr;
         break;
       case 0x3:
-        delete val_short_;
+        if (val_short_) delete val_short_;
         val_short_ = nullptr;
         break;
       case 0x4:
-        delete val_long_;
+        if (val_long_) delete val_long_;
         val_long_ = nullptr;
         break;
       case 0x5:
-        delete val_rational_;
+        if (val_rational_) delete val_rational_;
         val_rational_ = nullptr;
         break;
       case 0x7:
-        delete val_byte_;
+        if (val_byte_) delete val_byte_;
         val_byte_ = nullptr;
         break;
       case 0xA:
-        delete val_srational_;
+        if (val_srational_) delete val_srational_;
         val_srational_ = nullptr;
         break;
       case 0xff:
@@ -207,6 +226,7 @@ class IFEntry {
         // should I throw an exception or ...?
         break;
     }
+    format_ = 0xff;
   }
   void new_union() {
     switch (format_) {
@@ -405,19 +425,15 @@ IFEntry inline parseIFEntry(const unsigned char *buf, const unsigned long offs,
   // Parse value in specified format
   switch (result.format()) {
     case 1:
-      if (!extract_values<uint8_t>(result.val_byte(), buf, base, isLittleEndian,
-                                   len, result)) {
-        result.tag(0xFF);
-      }
+      result.isDecoded = extract_values<uint8_t>(result.val_byte(), buf, base, isLittleEndian,
+                                   len, result);
       break;
     case 2:
       // string is basically sequence of uint8_t (well, according to EXIF even
       // uint7_t, but
       // we don't have that), so just read it as bytes
-      if (!extract_values<uint8_t>(result.val_string(), buf, base, isLittleEndian,
-                                   len, result)) {
-        result.tag(0xFF);
-      }
+      result.isDecoded = extract_values<uint8_t>(result.val_string(), buf, base, isLittleEndian,
+                                   len, result);
       // and cut zero byte at the end, since we don't want that in the
       // std::string
       if (result.val_string()[result.val_string().length() - 1] == '\0') {
@@ -425,40 +441,30 @@ IFEntry inline parseIFEntry(const unsigned char *buf, const unsigned long offs,
       }
       break;
     case 3:
-      if (!extract_values<uint16_t>(result.val_short(), buf, base, isLittleEndian,
-                                    len, result)) {
-        result.tag(0xFF);
-      }
+      result.isDecoded = extract_values<uint16_t>(result.val_short(), buf, base, isLittleEndian,
+                                    len, result);
       break;
     case 4:
-      if (!extract_values<uint32_t>(result.val_long(), buf, base, isLittleEndian,
-                                    len, result)) {
-        result.tag(0xFF);
-      }
+      result.isDecoded = extract_values<uint32_t>(result.val_long(), buf, base, isLittleEndian,
+                                    len, result);
       break;
     case 5:
-      if (!extract_values<Rational>(result.val_rational(), buf, base, isLittleEndian,
-                                    len, result)) {
-        result.tag(0xFF);
-      }
+      result.isDecoded = extract_values<Rational>(result.val_rational(), buf, base, isLittleEndian,
+                                    len, result);
       break;
     case 7:
-      if (!extract_values<uint8_t>(result.val_byte(), buf, base, isLittleEndian,
-                                   len, result)) {
-        result.tag(0xFF);
-      }
+      result.isDecoded = extract_values<uint8_t>(result.val_byte(), buf, base, isLittleEndian,
+                                   len, result);
       break;
     case 9:
       VERBOSE(std::cerr << " - unknown format");
       break;
     case 10:
-      if (!extract_values<SRational>(result.val_srational(), buf, base, isLittleEndian, 
-                                     len, result)) {
-        result.tag(0xFF);
-      }
+      result.isDecoded = extract_values<SRational>(result.val_srational(), buf, base, isLittleEndian, 
+                                     len, result);
       break;
     default:
-      result.tag(0xFF);
+      result.isDecoded = false;
   }
   return result;
 }
